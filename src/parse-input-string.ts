@@ -17,6 +17,10 @@ export type ArgPart =
   | {
       type: "backticks";
       content: string;
+    }
+  | {
+      type: "js-tagged";
+      content: string;
     };
 
 const escapedChars = {
@@ -28,7 +32,11 @@ const escapedChars = {
   "\\": "\\",
   "'": "'",
   '"': '"',
+  "`": "`",
 };
+
+const JS_START_TAG = "js>";
+const JS_END_TAG = "<js";
 
 export function parseInputString(input: string): Array<ArgPart> {
   let results: Array<ArgPart> = [];
@@ -37,7 +45,8 @@ export function parseInputString(input: string): Array<ArgPart> {
     | "DEFAULT"
     | "IN_DOUBLE_STRING"
     | "IN_SINGLE_STRING"
-    | "IN_BACKTICKS" = "DEFAULT";
+    | "IN_BACKTICKS"
+    | "IN_JS_TAG" = "DEFAULT";
   let argBeingBuilt = "";
 
   function finishBareWord() {
@@ -58,6 +67,10 @@ export function parseInputString(input: string): Array<ArgPart> {
       mode = "DEFAULT";
     } else if (mode === "IN_BACKTICKS") {
       results.push({ type: "backticks", content: argBeingBuilt });
+      argBeingBuilt = "";
+      mode = "DEFAULT";
+    } else if (mode === "IN_JS_TAG") {
+      results.push({ type: "js-tagged", content: argBeingBuilt });
       argBeingBuilt = "";
       mode = "DEFAULT";
     } else {
@@ -84,6 +97,24 @@ export function parseInputString(input: string): Array<ArgPart> {
     if (mode === "DEFAULT" && /\s/.test(char)) {
       finishBareWord();
       appendGap();
+      continue;
+    }
+
+    if (
+      mode === "DEFAULT" &&
+      input.slice(i, i + JS_START_TAG.length) === JS_START_TAG
+    ) {
+      mode = "IN_JS_TAG";
+      i += JS_START_TAG.length;
+      continue;
+    }
+
+    if (
+      mode === "IN_JS_TAG" &&
+      input.slice(i, i + JS_END_TAG.length) === JS_END_TAG
+    ) {
+      finishString();
+      i += JS_END_TAG.length;
       continue;
     }
 
