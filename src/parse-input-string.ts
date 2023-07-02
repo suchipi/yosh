@@ -15,11 +15,15 @@ export type ArgPart =
       content: string;
     }
   | {
-      type: "backticks";
+      type: "curlies";
       content: string;
     }
   | {
-      type: "js-tagged";
+      type: "square-brackets";
+      content: string;
+    }
+  | {
+      type: "backticks";
       content: string;
     };
 
@@ -35,9 +39,6 @@ const escapedChars = {
   "`": "`",
 };
 
-const JS_START_TAG = "js>";
-const JS_END_TAG = "<js";
-
 export function parseInputString(input: string): Array<ArgPart> {
   let results: Array<ArgPart> = [];
 
@@ -46,7 +47,8 @@ export function parseInputString(input: string): Array<ArgPart> {
     | "IN_DOUBLE_STRING"
     | "IN_SINGLE_STRING"
     | "IN_BACKTICKS"
-    | "IN_JS_TAG" = "DEFAULT";
+    | "IN_CURLIES"
+    | "IN_SQUARE_BRACKETS" = "DEFAULT";
   let argBeingBuilt = "";
 
   function finishBareWord() {
@@ -56,28 +58,24 @@ export function parseInputString(input: string): Array<ArgPart> {
     argBeingBuilt = "";
   }
 
-  function finishString() {
-    if (mode === "IN_DOUBLE_STRING") {
-      results.push({ type: "double-quoted", content: argBeingBuilt });
-      argBeingBuilt = "";
-      mode = "DEFAULT";
-    } else if (mode === "IN_SINGLE_STRING") {
-      results.push({ type: "single-quoted", content: argBeingBuilt });
-      argBeingBuilt = "";
-      mode = "DEFAULT";
-    } else if (mode === "IN_BACKTICKS") {
-      results.push({ type: "backticks", content: argBeingBuilt });
-      argBeingBuilt = "";
-      mode = "DEFAULT";
-    } else if (mode === "IN_JS_TAG") {
-      results.push({ type: "js-tagged", content: argBeingBuilt });
-      argBeingBuilt = "";
-      mode = "DEFAULT";
-    } else {
+  function closeDelimitedSection() {
+    const type = {
+      IN_DOUBLE_STRING: "double-quoted",
+      IN_SINGLE_STRING: "single-quoted",
+      IN_BACKTICKS: "backticks",
+      IN_CURLIES: "curlies",
+      IN_SQUARE_BRACKETS: "square-brackets",
+    }[mode];
+
+    if (!type) {
       throw new Error(
-        `Internal error: cannot call finishString in mode '${mode}'`
+        `Internal error: cannot call closeDelimitedSection in mode '${mode}'`
       );
     }
+
+    results.push({ type, content: argBeingBuilt });
+    argBeingBuilt = "";
+    mode = "DEFAULT";
   }
 
   function appendGap() {
@@ -100,40 +98,32 @@ export function parseInputString(input: string): Array<ArgPart> {
       continue;
     }
 
-    if (
-      mode === "DEFAULT" &&
-      input.slice(i, i + JS_START_TAG.length) === JS_START_TAG
-    ) {
-      mode = "IN_JS_TAG";
-      i += JS_START_TAG.length;
-      continue;
+    // start of delimited section
+    if (mode === "DEFAULT") {
+      if (char === '"') {
+        finishBareWord();
+        mode = "IN_DOUBLE_STRING";
+        continue;
+      } else if (char === "'") {
+        finishBareWord();
+        mode = "IN_SINGLE_STRING";
+        continue;
+      } else if (char === "`") {
+        finishBareWord();
+        mode = "IN_BACKTICKS";
+        continue;
+      } else if (char === "{") {
+        finishBareWord();
+        mode = "IN_CURLIES";
+        continue;
+      } else if (char === "[") {
+        finishBareWord();
+        mode = "IN_SQUARE_BRACKETS";
+        continue;
+      }
     }
 
-    if (
-      mode === "IN_JS_TAG" &&
-      input.slice(i, i + JS_END_TAG.length) === JS_END_TAG
-    ) {
-      finishString();
-      i += JS_END_TAG.length;
-      continue;
-    }
-
-    // start of string
-    if (mode === "DEFAULT" && char === '"') {
-      finishBareWord();
-      mode = "IN_DOUBLE_STRING";
-      continue;
-    } else if (mode === "DEFAULT" && char === "'") {
-      finishBareWord();
-      mode = "IN_SINGLE_STRING";
-      continue;
-    } else if (mode === "DEFAULT" && char === "`") {
-      finishBareWord();
-      mode = "IN_BACKTICKS";
-      continue;
-    }
-
-    // escape sequences in strings eat next char
+    // string escape sequences in strings eat next char
     if (
       mode === "IN_DOUBLE_STRING" ||
       mode === "IN_SINGLE_STRING" ||
@@ -149,15 +139,21 @@ export function parseInputString(input: string): Array<ArgPart> {
       }
     }
 
-    // end of string
-    if (mode === "IN_DOUBLE_STRING" && char === '"') {
-      finishString();
+    // end of delimited section
+    if (char === '"' && mode === "IN_DOUBLE_STRING") {
+      closeDelimitedSection();
       continue;
-    } else if (mode === "IN_SINGLE_STRING" && char === "'") {
-      finishString();
+    } else if (char === "'" && mode === "IN_SINGLE_STRING") {
+      closeDelimitedSection();
       continue;
-    } else if (mode === "IN_BACKTICKS" && char === "`") {
-      finishString();
+    } else if (char === "`" && mode === "IN_BACKTICKS") {
+      closeDelimitedSection();
+      continue;
+    } else if (char === "}" && mode === "IN_CURLIES") {
+      closeDelimitedSection();
+      continue;
+    } else if (char === "]" && mode === "IN_SQUARE_BRACKETS") {
+      closeDelimitedSection();
       continue;
     }
 
@@ -169,11 +165,23 @@ export function parseInputString(input: string): Array<ArgPart> {
     finishBareWord();
   } else if (mode === "IN_DOUBLE_STRING") {
     throw new Error(
-      `Invalid command string: unterminated double-quote: ${input}`
+      `Invalid command string: unterminated double-quoted string: ${input}`
     );
   } else if (mode === "IN_SINGLE_STRING") {
     throw new Error(
-      `Invalid command string: unterminated single-quote: ${input}`
+      `Invalid command string: unterminated single-quoted string: ${input}`
+    );
+  } else if (mode === "IN_BACKTICKS") {
+    throw new Error(
+      `Invalid command string: unterminated template literal (backtick string): ${input}`
+    );
+  } else if (mode === "IN_CURLIES") {
+    throw new Error(
+      `Invalid command string: no '}' to match opening '{': ${input}`
+    );
+  } else if (mode === "IN_SQUARE_BRACKETS") {
+    throw new Error(
+      `Invalid command string: no ']' to match opening '[': ${input}`
     );
   }
 

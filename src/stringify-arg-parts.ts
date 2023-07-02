@@ -1,31 +1,5 @@
 import type { ArgPart } from "./parse-input-string";
 
-export function combineBareParts(parts: Array<ArgPart>): Array<ArgPart> {
-  const outputParts: Array<ArgPart> = [];
-
-  let inProgressBareContent: string = "";
-
-  let part: ArgPart;
-  const partsCopy = [...parts];
-  while ((part = partsCopy.shift()!)) {
-    if (part.type === "bare") {
-      inProgressBareContent += part.content;
-    } else {
-      if (inProgressBareContent) {
-        outputParts.push({ type: "bare", content: inProgressBareContent });
-        inProgressBareContent = "";
-      }
-      outputParts.push(part);
-    }
-  }
-
-  if (inProgressBareContent) {
-    outputParts.push({ type: "bare", content: inProgressBareContent });
-  }
-
-  return outputParts;
-}
-
 export function stringifyArgParts(
   parts: Array<ArgPart>,
   options: { quoteBare: boolean; gapReplacement: string }
@@ -52,6 +26,17 @@ export function stringifyArgParts(
       }
       case "backticks": {
         return "`" + part.content + "`";
+      }
+      case "curlies": {
+        return "{" + part.content + "}";
+      }
+      case "square-brackets": {
+        return "[" + part.content + "]";
+      }
+      default: {
+        throw new Error(
+          `unhandled ArgPart type in stringifyArgParts: ${(part as any).type}`
+        );
       }
     }
   });
