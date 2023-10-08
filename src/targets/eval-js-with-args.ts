@@ -36,10 +36,10 @@ export function evalJsWithArgs(input: string) {
     .filter(Boolean)
     .join(",");
 
-  const programName = firstPart.content;
+  const functionName = firstPart.content;
 
-  console.log(dim("-> eval js w/ args: " + programName + "(" + args + ")"));
-  const wrapper = std.evalScript("(program) => program(" + args + ")");
-  const program = globalThis[programName];
-  return wrapper(program);
+  console.log(dim(`-> ${functionName}(${args})`));
+  const wrapper = std.evalScript("(fn) => fn(" + args + ")");
+  const fn = globalThis[functionName];
+  return wrapper(fn);
 }

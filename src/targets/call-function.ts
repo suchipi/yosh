@@ -1,5 +1,6 @@
 export function callFunction(input: string) {
-  console.log(dim("-> call " + input));
-  const program = globalThis[input.trim()];
-  return program();
+  const functionName = input.trim();
+  console.log(dim(`-> ${functionName}()`));
+  const fn = globalThis[functionName];
+  return fn();
 }

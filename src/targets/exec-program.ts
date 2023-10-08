@@ -5,6 +5,8 @@ export function execProgram(input: string) {
     .filter((part) => part.type !== "gap")
     .map((part) => (part as any).content);
 
-  console.log(dim("-> exec program: " + JSON.stringify(execArgs)));
+  console.log(
+    dim(`-> exec(${JSON.stringify(execArgs)}, { failOnNonZeroStatus: false });`)
+  );
   return exec(execArgs, { failOnNonZeroStatus: false });
 }

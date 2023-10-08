@@ -48,7 +48,8 @@ export function determineTarget(input: string): {
   if (firstWord != null && firstWord === firstPart.content) {
     if (
       Object.hasOwn(globalThis, firstWord) &&
-      typeof globalThis[firstWord] === "function"
+      typeof globalThis[firstWord] === "function" &&
+      !globalThis[firstWord].toString().startsWith("class")
     ) {
       if (parts.length === 1) {
         return { target: callFunction, input };
