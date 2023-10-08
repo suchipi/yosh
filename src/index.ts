@@ -5,15 +5,6 @@ import { execProgram } from "./targets/exec-program";
 
 globalThis.prompt = defaultPrompt;
 
-// TODO yavascript needs to expose NOTHING somehow
-function isNothing(value: unknown) {
-  try {
-    return String(value) === "Symbol(NOTHING)";
-  } catch {
-    return false;
-  }
-}
-
 function isBoringExecResult(value: unknown) {
   // {
   //   status: 0
@@ -39,7 +30,7 @@ function handleInput(rawInput: string) {
     const result = target(input);
     globalThis._ = result;
 
-    if (!is(result, types.undefined) && !isNothing(result)) {
+    if (!is(result, types.undefined) && result !== startRepl.NOTHING) {
       if (target === execProgram && isBoringExecResult(result)) {
         // don't print anything
       } else {
