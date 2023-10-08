@@ -20,13 +20,17 @@ function isBoringExecResult(value: unknown) {
   //   signal: undefined
   // }
 
-  return (
-    typeof value === "object" &&
-    value != null &&
-    Object.keys(value).length === 2 &&
-    (value as any).status === 0 &&
-    (value as any).signal === undefined
-  );
+  try {
+    return (
+      typeof value === "object" &&
+      value != null &&
+      Object.keys(value).length === 2 &&
+      (value as any).status === 0 &&
+      (value as any).signal === undefined
+    );
+  } catch (err) {
+    return false;
+  }
 }
 
 function handleInput(rawInput: string) {
