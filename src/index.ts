@@ -1,31 +1,7 @@
 #!/usr/bin/env yavascript
 import * as std from "quickjs:std";
-import * as os from "quickjs:os";
 import { ArgPart, parseInputString } from "./parse-input-string";
 import { stringifyArgParts } from "./stringify-arg-parts";
-
-// TODO put in yavascript
-function isExecutable(path: Path | string) {
-  const stats = os.stat(path.toString());
-  return stats.mode & os.S_IXUSR;
-}
-
-// TODO put in yavascript
-function which(binaryName: string): Path | null {
-  const PATH = env.PATH;
-  if (!PATH) {
-    return null;
-  }
-  const pathParts = PATH.split(":");
-  for (const lookupPath of pathParts) {
-    const potentialPath = new Path(lookupPath, binaryName);
-    if (exists(potentialPath) && isExecutable(potentialPath)) {
-      return potentialPath;
-    }
-  }
-
-  return null;
-}
 
 const RESET = reset("");
 
@@ -33,22 +9,30 @@ globalThis.prompt = function () {
   const username = $("whoami").stdout.trim();
   const hostname = $("hostname").stdout.trim();
 
-  let dir = pwd();
+  let dir = pwd().toString();
   if (env.HOME) {
     dir = dir.replace(new RegExp("^" + RegExp.escape(env.HOME)), "~");
   }
 
-  return `${green(username)}@${hostname} ${cyan(dir)}${RESET} \$ `;
+  return `${green(username)}${RESET}@${hostname}${RESET} ${cyan(
+    dir
+  )}${RESET} \$ `;
+};
+
+globalThis.x = (...parts: Array<string>) => {
+  exec(parts.join(" "));
 };
 
 function handleInput(input: string) {
+  globalThis._error = null;
+
   if (input.trim() == "") {
     return;
   }
 
   try {
     const parts = input.split(/\s|\b/);
-    const firstPart = parts[0];
+    let firstPart = parts[0];
     if (firstPart == null || firstPart === "") {
       return;
     }
@@ -144,15 +128,18 @@ function handleInput(input: string) {
       }
     } else {
       targetName = "print var";
-      console.log(dim("-> print var: " + program));
+      console.log(dim("-> print var: " + firstPart));
       result = program;
     }
+
+    globalThis._ = result;
 
     // TODO yavascript needs to expose this
     if (String(result) !== "Symbol(NOTHING)") {
       console.log(result);
     }
   } catch (err) {
+    globalThis._error = err;
     console.error(err);
   }
 }
