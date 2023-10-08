@@ -36,7 +36,7 @@ function handleInput(rawInput: string) {
     globalThis._ = result;
 
     if (!is(result, types.undefined) && !isNothing(result)) {
-      if (isBoringExecResult(result) && target === execProgram) {
+      if (target === execProgram && isBoringExecResult(result)) {
         // don't print anything
       } else {
         console.log(result);
