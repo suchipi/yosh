@@ -1,5 +1,5 @@
 import { parseInputString } from "./parse-input-string";
-import { evalJs } from "./targets/eval-js";
+import { evalCivet } from "./targets/eval-civet";
 import { execProgram } from "./targets/exec-program";
 import { callFunction } from "./targets/call-function";
 import { evalJsWithArgs } from "./targets/eval-js-with-args";
@@ -22,7 +22,7 @@ export function determineTarget(input: string): {
 
   // prefix with j forces js mode
   if (input.startsWith("j ")) {
-    return { target: evalJs, input: input.slice(2) };
+    return { target: evalCivet, input: input.slice(2) };
   }
 
   const parts = parseInputString(input);
@@ -36,7 +36,7 @@ export function determineTarget(input: string): {
 
   const firstPart = parts[0];
   if (firstPart.type !== "bare") {
-    return { target: evalJs, input };
+    return { target: evalCivet, input };
   }
 
   let firstWord: string | null = null;
@@ -64,5 +64,5 @@ export function determineTarget(input: string): {
     }
   }
 
-  return { target: evalJs, input };
+  return { target: evalCivet, input };
 }
