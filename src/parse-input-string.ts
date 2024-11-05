@@ -39,8 +39,28 @@ const escapedChars = {
   "`": "`",
 };
 
-export function parseInputString(input: string): Array<ArgPart> {
+export function parseInputString(
+  input: string,
+  options: {
+    ignore?: Array<
+      | "double-quoted"
+      | "single-quoted"
+      | "backticks"
+      | "curlies"
+      | "square-brackets"
+    >;
+  } = {}
+): Array<ArgPart> {
   let results: Array<ArgPart> = [];
+
+  const ignoreSet = new Set(options?.ignore);
+  const tokensToIgnore = {
+    doubleQuoted: ignoreSet.has("double-quoted"),
+    singleQuoted: ignoreSet.has("single-quoted"),
+    backticks: ignoreSet.has("backticks"),
+    curlies: ignoreSet.has("curlies"),
+    squareBrackets: ignoreSet.has("square-brackets"),
+  };
 
   let mode:
     | "DEFAULT"
@@ -100,23 +120,23 @@ export function parseInputString(input: string): Array<ArgPart> {
 
     // start of delimited section
     if (mode === "DEFAULT") {
-      if (char === '"') {
+      if (char === '"' && !tokensToIgnore.doubleQuoted) {
         finishBareWord();
         mode = "IN_DOUBLE_STRING";
         continue;
-      } else if (char === "'") {
+      } else if (char === "'" && !tokensToIgnore.singleQuoted) {
         finishBareWord();
         mode = "IN_SINGLE_STRING";
         continue;
-      } else if (char === "`") {
+      } else if (char === "`" && !tokensToIgnore.backticks) {
         finishBareWord();
         mode = "IN_BACKTICKS";
         continue;
-      } else if (char === "{") {
+      } else if (char === "{" && !tokensToIgnore.curlies) {
         finishBareWord();
         mode = "IN_CURLIES";
         continue;
-      } else if (char === "[") {
+      } else if (char === "[" && !tokensToIgnore.squareBrackets) {
         finishBareWord();
         mode = "IN_SQUARE_BRACKETS";
         continue;

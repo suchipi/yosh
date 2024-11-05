@@ -2,7 +2,9 @@ import { parseInputString } from "../parse-input-string";
 import { stringifyArgParts } from "../stringify-arg-parts";
 
 export function execProgram(input: string) {
-  const argParts = parseInputString(input);
+  const argParts = parseInputString(input, {
+    ignore: ["square-brackets", "curlies"],
+  });
   const execArgs = stringifyArgParts(
     argParts.filter((part) => part.type !== "gap"),
     {
