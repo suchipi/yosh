@@ -3,6 +3,9 @@ import { defaultPrompt } from "./default-prompt";
 import { determineTarget } from "./determine-target";
 import { execProgram } from "./targets/exec-program";
 
+// suppress exec logging
+logger.info = () => {};
+
 globalThis.prompt = defaultPrompt;
 
 function isBoringExecResult(value: unknown) {

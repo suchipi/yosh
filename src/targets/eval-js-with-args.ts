@@ -1,3 +1,4 @@
+import * as engine from "quickjs:engine";
 import { parseInputString, ArgPart } from "../parse-input-string";
 import { stringifyArgParts } from "../stringify-arg-parts";
 
@@ -39,7 +40,7 @@ export function evalJsWithArgs(input: string) {
   const functionName = firstPart.content;
 
   console.log(dim(`-> ${functionName}(${args})`));
-  const wrapper = std.evalScript("(fn) => fn(" + args + ")");
+  const wrapper = engine.evalScript("(fn) => fn(" + args + ")");
   const fn = globalThis[functionName];
   return wrapper(fn);
 }

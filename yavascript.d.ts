@@ -24,8 +24,11 @@ declare var help: {
      *
      * If the value is later passed into the `help` function, the provided text
      * will be printed.
+     *
+     * To set help text for the values `null` or `undefined`, `allowNullish`
+     * must be `true`.
      */
-    (value: object, text: string): void;
+    (value: object, text: string, allowNullish?: boolean): void;
 
     /**
      * Lazily sets the help text for the provided value using the provided
@@ -250,14 +253,6 @@ declare function remove(path: string | Path): void;
 declare function exists(path: string | Path): boolean;
 
 /**
- * Creates directories for each of the provided path components,
- * if they don't already exist.
- *
- * Provides the same functionality as the command `mkdir -p`.
- */
-declare function ensureDir(path: string | Path): string;
-
-/**
  * Options for {@link copy}.
  */
 declare type CopyOptions = {
@@ -269,17 +264,34 @@ declare type CopyOptions = {
    */
   whenTargetExists?: "overwrite" | "skip" | "error";
 
-  /**
-   * If provided, this function will be called multiple times as `copy`
-   * traverses the filesystem, to help you understand what's going on and/or
-   * troubleshoot things. In most cases, it makes sense to use a logging
-   * function here, like so:
-   *
-   * ```js
-   * copy("./source", "./destination", { trace: console.log });
-   * ```
-   */
-  trace?: (...args: Array<any>) => void;
+  /** Options which control logging. */
+  logging?: {
+    /**
+     * If provided, this function will be called multiple times as `copy`
+     * traverses the filesystem, to help you understand what's going on and/or
+     * troubleshoot things. In most cases, it makes sense to use a logging
+     * function here, like so:
+     *
+     * ```js
+     * copy("./source", "./destination", {
+     *   logging: { trace: console.log },
+     * });
+     * ```
+     *
+     * Defaults to the current value of {@link logger.trace}. `logger.trace`
+     * defaults to a no-op function.
+     */
+    trace?: (...args: Array<any>) => void;
+
+    /**
+     * An optional, user-provided logging function to be used for informational
+     * messages.
+     *
+     * Defaults to the current value of {@link logger.info}. `logger.info`
+     * defaults to a function which writes to stderr.
+     */
+    info?: (...args: Array<any>) => void;
+  };
 };
 
 /**
@@ -316,7 +328,7 @@ declare class Path {
    * A list of suffixes that could appear in the filename for a program on the
    * current OS. For instance, on Windows, programs often end with ".exe".
    *
-   * On Unix-like OSes, this is empty, On Windows, it's based on `env.PATHEXT`.
+   * On Unix-like OSes, this is empty. On Windows, it's based on `env.PATHEXT`.
    */
   static readonly OS_PROGRAM_EXTENSIONS: ReadonlySet<string>;
 
@@ -333,16 +345,6 @@ declare class Path {
     // @ts-ignore might be instantiated with a different subtype
     fallback: Fallback = Path.OS_SEGMENT_SEPARATOR
   ): string | Fallback;
-
-  /** Join together one or more paths. */
-  static join(...inputs: Array<string | Path | Array<string | Path>>): Path;
-
-  /**
-   * Turns the input path(s) into an absolute path by resolving all `.` and `..`
-   * segments, using `pwd()` as a base dir to use when resolving leading `.` or
-   * `..` segments.
-   */
-  static resolve(...inputs: Array<string | Path | Array<string | Path>>): Path;
 
   /**
    * Concatenates the input path(s) and then resolves all non-leading `.` and
@@ -377,15 +379,12 @@ declare class Path {
   /** Create a new Path object using the provided input(s). */
   constructor(...inputs: Array<string | Path | Array<string | Path>>);
 
-  /** Create a new Path object using the provided segments and separator. */
-  static from(segments: Array<string>, separator: string): Path;
-
   /**
-   * Create an absolute path by `concat`ting `subpaths` onto this Path (which is
-   * presumed to be an absolute path) and then using `normalize()` on the
-   * result. If the result is not an absolute path, an error will be thrown.
+   * Create a new Path object using the provided segments and separator.
+   *
+   * If unspecified, `separator` defaults to `Path.OS_SEGMENT_SEPARATOR`.
    */
-  resolve(...subpaths: Array<string | Path>): Path;
+  static fromRaw(segments: Array<string>, separator?: string): Path;
 
   /**
    * Resolve all non-leading `.` and `..` segments in this path.
@@ -451,6 +450,106 @@ declare class Path {
    * the same as the global `extname`'s `options` parameter.
    */
   extname(options?: { full?: boolean }): string;
+
+  /**
+   * Return a new Path containing all of the path segments in this one except
+   * for the last one; ie. the path to the directory that contains this path.
+   */
+  dirname(): Path;
+
+  /**
+   * Return whether this path starts with the provided value, by comparing one
+   * path segment at a time.
+   *
+   * The starting segments of this path must *exactly* match the segments in the
+   * provided value.
+   *
+   * This means that, given two Paths A and B:
+   *
+   * ```
+   *   A: Path { /home/user/.config }
+   *   B: Path { /home/user/.config2 }
+   * ```
+   *
+   * Path B does *not* start with Path A, because `".config" !== ".config2"`.
+   */
+  startsWith(value: string | Path | Array<string | Path>): boolean;
+
+  /**
+   * Return whether this path ends with the provided value, by comparing one
+   * path segment at a time.
+   *
+   * The ending segments of this path must *exactly* match the segments in the
+   * provided value.
+   *
+   * This means that, given two Paths A and B:
+   *
+   * ```
+   *   A: Path { /home/1user/.config }
+   *   B: Path { user/.config }
+   * ```
+   *
+   * Path A does *not* end with Path B, because `"1user" !== "user"`.
+   */
+  endsWith(value: string | Path | Array<string | Path>): boolean;
+
+  /**
+   * Return the path segment index at which `value` appears in this path, or
+   * `-1` if it doesn't appear in this path.
+   *
+   * @param value - The value to search for. If the value contains more than one path segment, the returned index will refer to the location of the value's first path segment.
+   * @param fromIndex - The index into this path's segments to begin searching at. Defaults to `0`.
+   */
+  indexOf(
+    value: string | Path | Array<string | Path>,
+    fromIndex?: number | undefined
+  ): number;
+
+  /**
+   * Return whether `value` appears in this path.
+   *
+   * @param value - The value to search for.
+   * @param fromIndex - The index into this path's segments to begin searching at. Defaults to `0`.
+   */
+  includes(
+    value: string | Path | Array<string | Path>,
+    fromIndex?: number | undefined
+  ): boolean;
+
+  /**
+   * Return a new Path wherein the segments in `value` have been replaced with
+   * the segments in `replacement`. If the segments in `value` are not present
+   * in this path, a clone of this path is returned.
+   *
+   * Note that only the first match is replaced.
+   *
+   * @param value - What should be replaced
+   * @param replacement - What it should be replaced with
+   */
+  replace(
+    value: string | Path | Array<string | Path>,
+    replacement: string | Path | Array<string | Path>
+  ): Path;
+
+  /**
+   * Return a new Path wherein all occurrences of the segments in `value` have
+   * been replaced with the segments in `replacement`. If the segments in
+   * `value` are not present in this path, a clone of this path is returned.
+   *
+   * @param value - What should be replaced
+   * @param replacement - What it should be replaced with
+   */
+  replaceAll(
+    value: string | Path | Array<string | Path>,
+    replacement: string | Path | Array<string | Path>
+  ): Path;
+
+  /**
+   * Return a copy of this path but with the final segment replaced with `replacement`
+   *
+   * @param replacement - The new final segment(s) for the returned Path
+   */
+  replaceLast(replacement: string | Path | Array<string | Path>): Path;
 }
 
 /**
@@ -475,9 +574,36 @@ declare var __dirname: string;
 declare function basename(path: string | Path): string;
 
 /**
- * Reads the contents of one of more files from disk as one UTF-8 string.
+ * Reads the contents of one or more files from disk as either one UTF-8 string
+ * or one ArrayBuffer.
  */
-declare function cat(...paths: Array<string | Path>): string;
+declare const cat: {
+  /**
+   * Read the contents of one or more files from disk, as one UTF-8 string.
+   */
+  (paths: string | Path | Array<string | Path>): string;
+
+  /**
+   * Read the contents of one or more files from disk, as one UTF-8 string.
+   */
+  (paths: string | Path | Array<string | Path>, options: {}): string;
+
+  /**
+   * Read the contents of one or more files from disk, as one UTF-8 string.
+   */
+  (
+    paths: string | Path | Array<string | Path>,
+    options: { binary: false }
+  ): string;
+
+  /**
+   * Read the contents of one or more files from disk, as one ArrayBuffer.
+   */
+  (
+    paths: string | Path | Array<string | Path>,
+    options: { binary: true }
+  ): ArrayBuffer;
+};
 
 /**
  * Change the process's current working directory to the specified path. If no
@@ -544,6 +670,22 @@ declare function dirname(path: string | Path): Path;
 declare const echo: typeof console.log;
 
 /**
+ * Exit the yavascript process.
+ *
+ * Provides the same functionality as the shell builtin of the same name.
+ *
+ * If exit is called with an argument, that argument is used as the exit code.
+ * Otherwise, `exit.code` is used, which defaults to 0.
+ *
+ * `exit.code` will also be used as the exit status code for the yavascript
+ * process if the process exits normally.
+ */
+declare const exit: {
+  (code?: number): never;
+  code: number;
+};
+
+/**
  * Returns the file extension of the file at a given path.
  *
  * If the file has no extension (eg `Makefile`, etc), then `''` will be returned.
@@ -560,6 +702,41 @@ declare function extname(
  * omitted.
  */
 declare function ls(dir?: string | Path): Array<Path>;
+
+/**
+ * Create a directory (folder).
+ *
+ * Provides the same functionality as the unix binary of the same name.
+ */
+declare function mkdir(
+  path: string | Path,
+  options?: {
+    recursive?: boolean;
+    mode?: number;
+    logging?: {
+      trace?: (...args: Array<any>) => void;
+      info?: (...args: Array<any>) => void;
+    };
+  }
+): void;
+
+/**
+ * Create a directory (folder) and all parents, recursively
+ *
+ * Alias for `mkdir(path, { recursive: true })`.
+ *
+ * Provides the same functionality as `mkdir -p`.
+ */
+declare function mkdirp(
+  path: string | Path,
+  options?: {
+    mode?: number;
+    logging?: {
+      trace?: (...args: Array<any>) => void;
+      info?: (...args: Array<any>) => void;
+    };
+  }
+): void;
 
 /**
  * Print data to stdout using C-style format specifiers.
@@ -660,14 +837,42 @@ declare function touch(path: string | Path): void;
  * @param options Options which affect how the search is performed
  * @param options.searchPaths A list of folders where programs may be found. Defaults to `env.PATH?.split(Path.OS_ENV_VAR_SEPARATOR) || []`.
  * @param options.suffixes A list of filename extension suffixes to include in the search, ie [".exe"]. Defaults to `Path.OS_PROGRAM_EXTENSIONS`.
- * @param options.trace A logging function that will be called at various times during the execution of `which`. Defaults to `traceAll.getDefaultTrace()`.
+ * @param options.trace A logging function that will be called at various times during the execution of `which`. Defaults to {@link logger.trace}.
  */
 declare function which(
   binaryName: string,
   options?: {
+    /**
+     * A list of folders where programs may be found. Defaults to
+     * `env.PATH?.split(Path.OS_ENV_VAR_SEPARATOR) || []`.
+     */
     searchPaths?: Array<Path | string>;
+
+    /**
+     * A list of filename extension suffixes to include in the search, ie
+     * `[".exe"]`. Defaults to {@link Path.OS_PROGRAM_EXTENSIONS}.
+     */
     suffixes?: Array<string>;
-    trace?: (...args: Array<any>) => void;
+
+    /** Options which control logging. */
+    logging?: {
+      /**
+       * If provided, this logging function will be called multiple times as
+       * `which` runs, to help you understand what's going on and/or troubleshoot
+       * things. In most cases, it makes sense to use a function from `console`
+       * here, like so:
+       *
+       * ```js
+       * which("bash", {
+       *   logging: { trace: console.log }
+       * });
+       * ```
+       *
+       * Defaults to the current value of {@link logger.trace}. `logger.trace`
+       * defaults to a no-op function.
+       */
+      trace?: (...args: Array<any>) => void;
+    };
   }
 ): Path | null;
 
@@ -678,16 +883,34 @@ declare type BaseExecOptions = {
   /** Sets environment variables within the process. */
   env?: { [key: string | number]: string | number | boolean };
 
-  /**
-   * If provided, this function will be called multiple times as `exec`
-   * runs, to help you understand what's going on and/or troubleshoot things.
-   * In most cases, it makes sense to use a logging function here, like so:
-   *
-   * ```js
-   * exec(["echo", "hi"], { trace: console.log });
-   * ```
-   */
-  trace?: (...args: Array<any>) => void;
+  /** Options which control logging. */
+  logging?: {
+    /**
+     * If provided, this logging function will be called multiple times as
+     * `exec` runs, to help you understand what's going on and/or troubleshoot
+     * things. In most cases, it makes sense to use a function from `console`
+     * here, like so:
+     *
+     * ```js
+     * exec(["echo", "hi"], {
+     *   logging: { trace: console.log },
+     * });
+     * ```
+     *
+     * Defaults to the current value of {@link logger.trace}. `logger.trace`
+     * defaults to a no-op function.
+     */
+    trace?: (...args: Array<any>) => void;
+
+    /**
+     * An optional, user-provided logging function to be used for informational
+     * messages. Less verbose than `logging.trace`.
+     *
+     * Defaults to the current value of {@link logger.info}. `logger.info`
+     * defaults to a function which logs to stderr.
+     */
+    info?: (...args: Array<any>) => void;
+  };
 
   /**
    * Whether an Error should be thrown when the process exits with a nonzero
@@ -704,142 +927,59 @@ declare type BaseExecOptions = {
    * Defaults to false. true is an alias for "utf8".
    */
   captureOutput?: boolean | "utf8" | "arraybuffer";
+
+  /**
+   * If true, exec doesn't return until the process is done running. If false,
+   * exec returns an object with a "wait" method which can be used to wait for
+   * the process to be done running.
+   *
+   * Defaults to true.
+   */
+  block?: boolean;
 };
 
+type ExecWaitResult<ExecOptions extends BaseExecOptions> = ExecOptions extends
+  | { captureOutput: true | "utf8" | "arraybuffer" }
+  | { failOnNonZeroStatus: false }
+  ? (ExecOptions["captureOutput"] extends true | "utf8"
+      ? { stdout: string; stderr: string }
+      : {}) &
+      (ExecOptions["captureOutput"] extends "arraybuffer"
+        ? { stdout: ArrayBuffer; stderr: ArrayBuffer }
+        : {}) &
+      (ExecOptions["failOnNonZeroStatus"] extends false
+        ?
+            | { status: number; signal: undefined }
+            | { status: undefined; signal: number }
+        : {})
+  : void;
+
 declare interface Exec {
-  (
-    args: Array<string | Path | number> | string | Path,
-    options: BaseExecOptions & {
+  <
+    ExecOptions extends BaseExecOptions = {
       failOnNonZeroStatus: true;
       captureOutput: false;
+      block: true;
     }
-  ): void;
-
-  (
+  >(
     args: Array<string | Path | number> | string | Path,
-    options: BaseExecOptions & {
-      failOnNonZeroStatus: false;
-      captureOutput: false;
-    }
-  ):
-    | { status: number; signal: undefined }
-    | { status: undefined; signal: number };
+    options?: ExecOptions
+  ): ExecOptions["block"] extends false
+    ? { wait(): ExecWaitResult<ExecOptions> }
+    : ExecWaitResult<ExecOptions>;
 
-  (
-    args: Array<string | Path | number> | string | Path,
-    options: BaseExecOptions & {
-      failOnNonZeroStatus: true;
-      captureOutput: true;
-    }
-  ): { stdout: string; stderr: string };
-
-  (
-    args: Array<string | Path | number> | string | Path,
-    options: BaseExecOptions & {
-      failOnNonZeroStatus: true;
-      captureOutput: "utf8";
-    }
-  ): { stdout: string; stderr: string };
-
-  (
-    args: Array<string | Path | number> | string | Path,
-    options: BaseExecOptions & {
-      failOnNonZeroStatus: true;
-      captureOutput: "arraybuffer";
-    }
-  ): { stdout: ArrayBuffer; stderr: ArrayBuffer };
-
-  (
-    args: Array<string | Path | number> | string | Path,
-    options: BaseExecOptions & {
-      failOnNonZeroStatus: false;
-      captureOutput: true;
-    }
-  ):
-    | { stdout: string; stderr: string; status: number; signal: undefined }
-    | { stdout: string; stderr: string; status: undefined; signal: number };
-
-  (
-    args: Array<string | Path | number> | string | Path,
-    options: BaseExecOptions & {
-      failOnNonZeroStatus: false;
-      captureOutput: "utf-8";
-    }
-  ):
-    | { stdout: string; stderr: string; status: number; signal: undefined }
-    | { stdout: string; stderr: string; status: undefined; signal: number };
-
-  (
-    args: Array<string | Path | number> | string | Path,
-    options: BaseExecOptions & {
-      failOnNonZeroStatus: false;
-      captureOutput: "arraybuffer";
-    }
-  ):
-    | {
-        stdout: ArrayBuffer;
-        stderr: ArrayBuffer;
-        status: number;
-        signal: undefined;
-      }
-    | {
-        stdout: ArrayBuffer;
-        stderr: ArrayBuffer;
-        status: undefined;
-        signal: number;
-      };
-
-  (
-    args: Array<string | Path | number> | string | Path,
-    options: BaseExecOptions & {
-      failOnNonZeroStatus: true;
-    }
-  ): void;
-
-  (
-    args: Array<string | Path | number> | string | Path,
-    options: BaseExecOptions & {
-      failOnNonZeroStatus: false;
-    }
-  ):
-    | { status: number; signal: undefined }
-    | { status: undefined; signal: number };
-
-  (
-    args: Array<string | Path | number> | string | Path,
-    options: BaseExecOptions & {
-      captureOutput: true;
-    }
-  ): { stdout: string; stderr: string };
-
-  (
-    args: Array<string | Path | number> | string | Path,
-    options: BaseExecOptions & {
-      captureOutput: "utf8";
-    }
-  ): { stdout: string; stderr: string };
-
-  (
-    args: Array<string | Path | number> | string | Path,
-    options: BaseExecOptions & {
-      captureOutput: "arraybuffer";
-    }
-  ): { stdout: ArrayBuffer; stderr: ArrayBuffer };
-
-  (
-    args: Array<string | Path | number> | string | Path,
-    options: BaseExecOptions & {
-      captureOutput: false;
-    }
-  ): void;
-
-  (
-    args: Array<string | Path | number> | string | Path,
-    options?: BaseExecOptions
-  ): void;
+  /**
+   * Parse the provided value into an array of command-line argument strings,
+   * using the same logic that {@link exec} and {@link ChildProcess} use.
+   */
+  toArgv(args: Array<string | Path | number> | string | Path): Array<string>;
 }
 
-/** Runs a child process using the provided arguments. The first value in the arguments array is the program to run. */
+/**
+ * Runs a child process using the provided arguments.
+ *
+ * The first value in the arguments array is the program to run.
+ */
 declare const exec: Exec;
 
 /** Alias for `exec(args, { captureOutput: true })` */
@@ -875,12 +1015,6 @@ declare interface ChildProcess {
     /** Where the process writes stderr to */
     err: FILE;
   };
-
-  /**
-   * Optional trace function which, if present, will be called at various times
-   * to provide information about the lifecycle of the process.
-   */
-  trace?: (...args: Array<any>) => void;
 
   pid: number | null;
 
@@ -918,11 +1052,17 @@ declare type ChildProcessOptions = {
     err?: FILE;
   };
 
-  /**
-   * Optional trace function which, if present, will be called at various times
-   * to provide information about the lifecycle of the process.
-   */
-  trace?: (...args: Array<any>) => void;
+  /** Options which control logging */
+  logging?: {
+    /**
+     * Optional trace function which, if present, will be called at various
+     * times to provide information about the lifecycle of the process.
+     *
+     * Defaults to the current value of {@link logger.trace}. `logger.trace`
+     * defaults to a function which writes to stderr.
+     */
+    trace?: (...args: Array<any>) => void;
+  };
 };
 
 declare interface ChildProcessConstructor {
@@ -954,17 +1094,34 @@ declare type GlobOptions = {
    */
   followSymlinks?: boolean;
 
-  /**
-   * If provided, this function will be called multiple times as `glob`
-   * traverses the filesystem, to help you understand what's going on and/or
-   * troubleshoot things. In most cases, it makes sense to use a logging
-   * function here, like so:
-   *
-   * ```js
-   * glob(["./*.js"], { trace: console.log });
-   * ```
-   */
-  trace?: (...args: Array<any>) => void;
+  /** Options which control logging. */
+  logging?: {
+    /**
+     * If provided, this function will be called multiple times as `glob`
+     * traverses the filesystem, to help you understand what's going on and/or
+     * troubleshoot things. In most cases, it makes sense to use a logging
+     * function here, like so:
+     *
+     * ```js
+     * glob(["./*.js"], {
+     *  logging: { trace: console.log }
+     * });
+     * ```
+     *
+     * Defaults to the current value of {@link logger.trace}. `logger.trace`
+     * defaults to a no-op function.
+     */
+    trace?: (...args: Array<any>) => void;
+
+    /**
+     * An optional, user-provided logging function to be used for informational
+     * messages. Less verbose than `logging.trace`.
+     *
+     * Defaults to the current value of {@link logger.info}. `logger.info`
+     * defaults to a function which writes to stderr.
+     */
+    info?: (...args: Array<any>) => void;
+  };
 
   /**
    * Directory to interpret glob patterns relative to. Defaults to `pwd()`.
@@ -996,73 +1153,73 @@ interface Console {
 /**
  * Remove ANSI control characters from a string.
  */
-declare function stripAnsi(input: string): string;
+declare function stripAnsi(input: string | number | Path): string;
 
 /**
  * Wrap a string in double quotes, and escape any double-quotes inside using `\"`.
  */
-declare function quote(input: string | Path): string;
+declare function quote(input: string | number | Path): string;
 
 // Colors
 
 /** Wrap a string with the ANSI control characters that will make it print as black text. */
-declare function black(input: string | number): string;
+declare function black(input: string | number | Path): string;
 /** Wrap a string with the ANSI control characters that will make it print as red text. */
-declare function red(input: string | number): string;
+declare function red(input: string | number | Path): string;
 /** Wrap a string with the ANSI control characters that will make it print as green text. */
-declare function green(input: string | number): string;
+declare function green(input: string | number | Path): string;
 /** Wrap a string with the ANSI control characters that will make it print as yellow text. */
-declare function yellow(input: string | number): string;
+declare function yellow(input: string | number | Path): string;
 /** Wrap a string with the ANSI control characters that will make it print as blue text. */
-declare function blue(input: string | number): string;
+declare function blue(input: string | number | Path): string;
 /** Wrap a string with the ANSI control characters that will make it print as magenta text. */
-declare function magenta(input: string | number): string;
+declare function magenta(input: string | number | Path): string;
 /** Wrap a string with the ANSI control characters that will make it print as cyan text. */
-declare function cyan(input: string | number): string;
+declare function cyan(input: string | number | Path): string;
 /** Wrap a string with the ANSI control characters that will make it print as white text. */
-declare function white(input: string | number): string;
+declare function white(input: string | number | Path): string;
 /** Wrap a string with the ANSI control characters that will make it print as gray text. */
-declare function gray(input: string | number): string;
+declare function gray(input: string | number | Path): string;
 /** Wrap a string with the ANSI control characters that will make it print as grey text. */
-declare function grey(input: string | number): string;
+declare function grey(input: string | number | Path): string;
 
 // Background Colors
 
 /** Wrap a string with the ANSI control characters that will make it have a black background. */
-declare function bgBlack(input: string | number): string;
+declare function bgBlack(input: string | number | Path): string;
 /** Wrap a string with the ANSI control characters that will make it have a red background. */
-declare function bgRed(input: string | number): string;
+declare function bgRed(input: string | number | Path): string;
 /** Wrap a string with the ANSI control characters that will make it have a green background. */
-declare function bgGreen(input: string | number): string;
+declare function bgGreen(input: string | number | Path): string;
 /** Wrap a string with the ANSI control characters that will make it have a yellow background. */
-declare function bgYellow(input: string | number): string;
+declare function bgYellow(input: string | number | Path): string;
 /** Wrap a string with the ANSI control characters that will make it have a blue background. */
-declare function bgBlue(input: string | number): string;
+declare function bgBlue(input: string | number | Path): string;
 /** Wrap a string with the ANSI control characters that will make it have a magenta background. */
-declare function bgMagenta(input: string | number): string;
+declare function bgMagenta(input: string | number | Path): string;
 /** Wrap a string with the ANSI control characters that will make it have a cyan background. */
-declare function bgCyan(input: string | number): string;
+declare function bgCyan(input: string | number | Path): string;
 /** Wrap a string with the ANSI control characters that will make it have a white background. */
-declare function bgWhite(input: string | number): string;
+declare function bgWhite(input: string | number | Path): string;
 
 // Modifiers
 
 /** Wrap a string with the ANSI control character that resets all styling. */
-declare function reset(input: string | number): string;
+declare function reset(input: string | number | Path): string;
 /** Wrap a string with the ANSI control characters that will make it print with a bold style. */
-declare function bold(input: string | number): string;
+declare function bold(input: string | number | Path): string;
 /** Wrap a string with the ANSI control characters that will make it print with a dimmed style. */
-declare function dim(input: string | number): string;
+declare function dim(input: string | number | Path): string;
 /** Wrap a string with the ANSI control characters that will make it print italicized. */
-declare function italic(input: string | number): string;
+declare function italic(input: string | number | Path): string;
 /** Wrap a string with the ANSI control characters that will make it print underlined. */
-declare function underline(input: string | number): string;
+declare function underline(input: string | number | Path): string;
 /** Wrap a string with ANSI control characters such that its foreground (text) and background colors are swapped. */
-declare function inverse(input: string | number): string;
+declare function inverse(input: string | number | Path): string;
 /** Wrap a string with ANSI control characters such that it is hidden. */
-declare function hidden(input: string | number): string;
+declare function hidden(input: string | number | Path): string;
 /** Wrap a string with the ANSI control characters that will make it print with a horizontal line through its center. */
-declare function strikethrough(input: string | number): string;
+declare function strikethrough(input: string | number | Path): string;
 
 /** Split `str` on newline and then return lines matching `pattern`. */
 declare const grepString: {
@@ -1458,17 +1615,9 @@ declare const types: {
   exactSymbol<T extends symbol>(sym: T): TypeValidator<T>;
   hasClassName<Name extends string>(
     name: Name
-  ): TypeValidator<{
-    constructor: Function & {
-      name: Name;
-    };
-  }>;
+  ): TypeValidator<{ constructor: Function & { name: Name } }>;
   hasToStringTag(name: string): TypeValidator<any>;
-  instanceOf<
-    Klass extends Function & {
-      prototype: any;
-    }
-  >(
+  instanceOf<Klass extends Function & { prototype: any }>(
     klass: Klass
   ): TypeValidator<Klass["prototype"]>;
   stringMatching(regexp: RegExp): TypeValidator<string>;
@@ -2586,7 +2735,6 @@ declare const types: {
   ) => TypeValidator<UnwrapTypeFromCoerceableOrValidator<V>>;
 
   FILE: TypeValidator<FILE>;
-  Module: TypeValidator<{ [key: string]: unknown }>;
   Path: TypeValidator<Path>;
   JSX: {
     unknownElement: TypeValidator<
@@ -2639,83 +2787,6 @@ declare const assert: {
     type: T,
     optionalMessage?: string
   ) => asserts value is UnwrapTypeFromCoerceableOrValidator<T>;
-};
-
-/**
- * The data source of a pipe operation; either an in-memory object, or a
- * file stream.
- *
- * - Use `maxLength` to limit how much data to read.
- * - Use `until` to stop reading once a certain byte or character has been
- *   read.
- * - Use `path` or `fd` to open a file (or pass a FILE or Path object).
- */
-declare type PipeSource =
-  | { data: string; maxLength?: number; until?: string | byte }
-  | ArrayBuffer
-  | { data: ArrayBuffer; maxLength?: number; until?: string | byte }
-  | SharedArrayBuffer
-  | { data: SharedArrayBuffer; maxLength?: number; until?: string | byte }
-  | TypedArray
-  | { data: TypedArray; maxLength?: number; until?: string | byte }
-  | DataView
-  | { data: DataView; maxLength?: number; until?: string | byte }
-  | FILE
-  | { data: FILE; maxLength?: number; until?: string | byte }
-  | Path
-  | { path: Path | string; maxLength?: number; until?: string | byte }
-  | { fd: number; maxLength?: number; until?: string | byte };
-
-/**
- * The target destination of a pipe operation; either an in-memory object, or a
- * file stream.
- *
- * - Use `intoExisting` to put data into an existing object or file handle.
- * - Use `intoNew` to put data into a new object.
- * - Use `path` or `fd` to create a new file handle and put data into it.
- */
-declare type PipeDestination =
-  | ArrayBuffer
-  | SharedArrayBuffer
-  | DataView
-  | TypedArray
-  | Path
-  | FILE
-  | ArrayBufferConstructor
-  | SharedArrayBufferConstructor
-  | DataViewConstructor
-  | TypedArrayConstructor
-  | StringConstructor
-  | { path: string }
-  | { fd: number };
-
-/**
- * Copy data from one source into the given target. Returns the number of bytes
- * written, and the target that data was written into.
- */
-declare function pipe<Dest extends PipeDestination>(
-  from: PipeSource,
-  to: Dest
-): {
-  bytesTransferred: number;
-  target: Dest extends
-    | ArrayBuffer
-    | SharedArrayBuffer
-    | DataView
-    | FILE
-    | { path: string }
-    | { fd: number }
-    ? Dest
-    : Dest extends
-        | ArrayBufferConstructor
-        | SharedArrayBufferConstructor
-        | DataViewConstructor
-        | TypedArrayConstructor
-        | DataViewConstructor
-    ? Dest["prototype"]
-    : Dest extends StringConstructor
-    ? string
-    : never;
 };
 
 interface InteractivePrompt {
@@ -2779,6 +2850,7 @@ declare const startRepl: {
       | "tsx"
       | "coffee"
       | "coffeescript"
+      | "civet"
   ): void;
 
   /**
@@ -2846,34 +2918,38 @@ declare class GitRepo {
 }
 
 /**
- * Configures the default value of `trace` in yavascript API functions which
- * receive `trace` as an option, like {@link which}, {@link exec}, {@link copy}
- * and {@link glob}.
+ * The logger used internally by yavascript API functions such as {@link which},
+ * {@link exec}, {@link copy}, {@link glob}, and more.
  *
- * - If called with `true`, the default value of `trace` in all functions which
- *   receive a `trace` option will be changed to `console.error`.
- * - If called with `false`, the default value of `trace` in all functions which
- *   receive a `trace` option will be changed to `undefined`.
- * - If called with any other value, the provided value will be used as the
- *   default value of `trace` in all functions which receive a `trace` option.
+ * You can modify the properties on this object in order to configure the
+ * amount and style of log output from yavascript API functions.
  *
- * If you would like to make your own functions use the default value of `trace`
- * as set by this function (in order to get the same behavior as yavascript API
- * functions which do so), call `traceAll.getDefaultTrace()` to get the current
- * value which should be used as the default value.
- *
- * `traceAll` provides similar functionality to shell builtin `set -x`.
+ * This object behaves similarly to the shell builtin `set -x`.
  */
-declare const traceAll: ((
-  trace: boolean | undefined | ((...args: Array<any>) => void)
-) => void) & {
-  getDefaultTrace(): ((...args: Array<any>) => void) | undefined;
+declare const logger: {
+  /**
+   * This property is used as the default value for `trace` in yavascript API
+   * functions which receive `logging.trace` as an option, like {@link which},
+   * {@link exec}, {@link copy} and {@link glob}.
+   *
+   * The default value of `logger.trace` is a no-op function.
+   */
+  trace: (...args: Array<any>) => void;
+
+  /**
+   * This property is used as the default value for `info` in yavascript API
+   * functions which receive `logging.info` as an option, like {@link exec},
+   * {@link copy}, and {@link glob}.
+   *
+   * The default value of `logger.info` writes dimmed text to stdout.
+   */
+  info: (...args: Array<any>) => void;
 };
 
 declare namespace JSX {
   /**
    * A string containing the expression that should be called to create JSX
-   * elements.
+   * elements. yavascript's internals use this string to transpile JSX syntax.
    *
    * Defaults to "JSX.createElement".
    *
@@ -2893,7 +2969,8 @@ declare namespace JSX {
 
   /**
    * A string containing the expression that should be used as the first
-   * parameter when creating JSX fragment elements.
+   * parameter when creating JSX fragment elements. yavascript's internals use
+   * this string to transpile JSX syntax.
    *
    * Defaults to "JSX.Fragment".
    *
@@ -2933,10 +3010,19 @@ declare namespace JSX {
   export type Fragment = Element<{}, typeof Fragment>;
 
   /**
-   * The JSX element constructor, which gets invoked whenever JSX syntax is
+   * The JSX element builder function, which gets invoked whenever JSX syntax is
    * used (unless {@link JSX.pragma} is changed).
+   *
+   * Note that if you change this, you need to verify that the following
+   * expression always evaluates to `true` (by changing {@link types.JSX.Element}
+   * and {@link types.JSX.Fragment}):
+   * ```jsx
+   * types.JSX.Element(<a />) && types.JSX.Fragment(<></>)
+   * ```
+   *
+   * Failure to uphold this guarantee indicates a bug.
    */
-  export const createElement: {
+  export let createElement: {
     <Type extends string | typeof Fragment | ((...args: any) => any)>(
       type: Type
     ): Element<{}, Type>;
@@ -3008,9 +3094,64 @@ declare const CSV: {
   stringify(input: Array<Array<string>>): string;
 };
 
+declare var TOML: {
+  /**
+   * Parse a TOML document (`data`) into an object.
+   */
+  parse(data: string): { [key: string]: any };
+  /**
+   * Convert an object into a TOML document.
+   */
+  stringify(data: { [key: string]: any }): string;
+};
+
 interface RegExpConstructor {
   /** See https://github.com/tc39/proposal-regex-escaping */
   escape(str: any): string;
+}
+
+interface StringConstructor {
+  /**
+   * Remove leading minimum indentation from the string.
+   * The first line of the string must be empty.
+   *
+   * https://github.com/tc39/proposal-string-dedent
+   */
+  dedent: {
+    /**
+     * Remove leading minimum indentation from the string.
+     * The first line of the string must be empty.
+     *
+     * https://github.com/tc39/proposal-string-dedent
+     */
+    (input: string): string;
+
+    /**
+     * Remove leading minimum indentation from the template literal.
+     * The first line of the string must be empty.
+     *
+     * https://github.com/tc39/proposal-string-dedent
+     */
+    (
+      strings: readonly string[] | ArrayLike<string>,
+      ...substitutions: unknown[]
+    ): string;
+
+    /**
+     * Wrap another template tag function such that tagged literals
+     * become dedented before being passed to the wrapped function.
+     *
+     * https://www.npmjs.com/package/string-dedent#usage
+     */
+    <
+      Func extends (
+        strings: readonly string[] | ArrayLike<string>,
+        ...substitutions: any[]
+      ) => string
+    >(
+      input: Func
+    ): Func;
+  };
 }
 
 // prettier-ignore
@@ -3060,6 +3201,10 @@ declare type TypedArrayConstructor =
   | Uint32ArrayConstructor
   | Float32ArrayConstructor
   | Float64ArrayConstructor;
+
+interface ErrorOptions {
+  [key: string]: any;
+}
 
 // ==========================================
 // ------------------------------------------
@@ -3938,6 +4083,33 @@ interface BigDecimal {
 // TypeScript will not understand or handle unary/binary operators for BigFloat
 // and BigDecimal properly.
 
+/**
+ * Print the arguments separated by spaces and a trailing newline.
+ *
+ * Non-string args are coerced into a string via [ToString](https://tc39.es/ecma262/#sec-tostring).
+ * Objects can override the default `ToString` behavior by defining a `toString` method.
+ */
+declare var print: (...args: Array<any>) => void;
+
+/**
+ * Object that provides functions for logging information.
+ */
+interface Console {
+  /** Same as {@link print}(). */
+  log: typeof print;
+
+  /** Same as {@link print}(). */
+  warn: typeof print;
+
+  /** Same as {@link print}(). */
+  error: typeof print;
+
+  /** Same as {@link print}(). */
+  info: typeof print;
+}
+
+declare var console: Console;
+
 /** npm: @suchipi/print@2.5.0. License: ISC */
 /* (with some QuickJS-specific modifications) */
 
@@ -4083,39 +4255,17 @@ declare interface InspectCustomInputs {
   colours: { [Key in keyof Required<InspectColours>]: string };
 }
 
+declare type Interval = { [Symbol.toStringTag]: "Interval" };
+
+declare function setInterval(func: (...args: any) => any, ms: number): Interval;
+declare function clearInterval(interval: Interval): void;
+
 // Definitions of the globals and modules added by quickjs-libc
 
 /**
  * Provides the command line arguments. The first argument is the script name.
  */
 declare var scriptArgs: Array<string>;
-
-/**
- * Print the arguments separated by spaces and a trailing newline.
- *
- * Non-string args are coerced into a string via [ToString](https://tc39.es/ecma262/#sec-tostring).
- * Objects can override the default `ToString` behavior by defining a `toString` method.
- */
-declare var print: (...args: Array<any>) => void;
-
-/**
- * Object that provides functions for logging information.
- */
-interface Console {
-  /** Same as {@link print}(). */
-  log: typeof print;
-
-  /** Same as {@link print}(). */
-  warn: typeof print;
-
-  /** Same as {@link print}(). */
-  error: typeof print;
-
-  /** Same as {@link print}(). */
-  info: typeof print;
-}
-
-declare var console: Console;
 
 /** An object representing a file handle. */
 declare interface FILE {
@@ -4184,6 +4334,20 @@ declare interface FILE {
   write(buffer: ArrayBuffer, position: number, length: number): number;
 
   /**
+   * Write this file into `target`, using a memory buffer of size `bufferSize`.
+   *
+   * If `limit` is specified, only that amount of bytes will be read and
+   * written. Otherwise, data is read and written until this file reaches EOF.
+   *
+   * A `limit` of 0 is treated the same as not specifying a limit.
+   *
+   * Internally, this function uses libc `fread` and `fwrite` in a loop.
+   *
+   * Returns the number of bytes read and written.
+   */
+  writeTo(target: FILE, bufferSize: number, limit?: number): number;
+
+  /**
    * Return the next line from the file, assuming UTF-8 encoding, excluding the trailing line feed or EOF.
    *
    * If the end of the file has been reached, then `null` will be returned instead of a string.
@@ -4214,54 +4378,42 @@ declare interface FILE {
 
 declare module "quickjs:std" {
   /**
+   * Set the exit code that the process should exit with in the future, if it
+   * exits normally.
+   *
+   * Can only be called from the main thread.
+   *
+   * This exit code will only be used if the process exits "normally", ie, when
+   * there are no more pending JS tasks/listeners. If an unhandled exception is
+   * thrown, the process will always exit with status `1`, regardless of the
+   * status code passed to `setExitCode`. If someone calls {@link exit} and
+   * passes in a status code, that status code will take precedence over the
+   * status code passed to `setExitCode`.
+   *
+   * @param statusCode The future exit code; 0 for success, nonzero for failure.
+   */
+  export function setExitCode(statusCode: number): void;
+
+  /**
+   * Return the exit code that was previously set by {@link setExitCode}, or 0 if
+   * it hasn't yet been set.
+   *
+   * Can only be called from the main thread.
+   */
+  export function getExitCode(): number;
+
+  /**
    * Exit the process with the provided status code.
+   *
+   * Can only be called from the main thread.
+   *
+   * If `statusCode` is not provided, a value previously passed into
+   * {@link setExitCode} will be used. If no value was previously passed into
+   * setExitCode, `0` will be used.
    *
    * @param statusCode The exit code; 0 for success, nonzero for failure.
    */
-  export function exit(statusCode: number): void;
-
-  /**
-   * Evaluate the string `code` as a script (global eval).
-   *
-   * @param code - The code to evaluate.
-   * @param options - An optional object containing the following optional properties:
-   * @property backtraceBarrier - Boolean (default = false). If true, error backtraces do not list the stack frames below the evalScript.
-   * @property filename - String (default = "<evalScript>"). The filename to associate with the code being executed.
-   * @returns The result of the evaluation.
-   */
-  export function evalScript(
-    code: string,
-    options?: { backtraceBarrier?: boolean; filename?: string }
-  ): any;
-
-  /**
-   * Evaluate the file `filename` as a script (global eval).
-   *
-   * @param filename - The relative or absolute path to the file to load. Relative paths are resolved relative to the process's current working directory.
-   * @returns The result of the evaluation.
-   */
-  export function loadScript(filename: string): any;
-
-  /**
-   * Evaluate the file `filename` as a module. Effectively a synchronous dynamic `import()`.
-   *
-   * @param filename - The relative or absolute path to the file to import. Relative paths are resolved relative to the file calling `importModule`, or `basename` if present.
-   * @param basename - If present and `filename` is a relative path, `filename` will be resolved relative to this basename.
-   * @returns The result of the evaluation (module namespace object).
-   */
-  export function importModule(
-    filename: string,
-    basename?: string
-  ): { [key: string]: any };
-
-  /**
-   * Return the resolved path to a module.
-   *
-   * @param filename - The relative or absolute path to the file to import. Relative paths are resolved relative to the file calling `importModule`, or `basename` if present.
-   * @param basename - If present and `filename` is a relative path, `filename` will be resolved relative to this basename.
-   * @returns The resolved module path.
-   */
-  export function resolveModule(filename: string, basename?: string): string;
+  export function exit(statusCode?: number): never;
 
   /**
    * Load the file `filename` and return it as a string assuming UTF-8 encoding.
@@ -4269,15 +4421,6 @@ declare module "quickjs:std" {
    * @param filename - The relative or absolute path to the file to load. Relative paths are resolved relative to the process's current working directory.
    */
   export function loadFile(filename: string): string;
-
-  /**
-   * Read the script of module filename from an active stack frame, then return it as a string.
-   *
-   * If there isn't a valid filename for the specified stack frame, an error will be thrown.
-   *
-   * @param stackLevels - How many levels up the stack to search for a filename. Defaults to 0, which uses the current stack frame.
-   */
-  export function getFileNameFromStack(stackLevels?: number): string;
 
   /**
    * Return a boolean indicating whether the provided value is a FILE object.
@@ -4362,9 +4505,6 @@ declare module "quickjs:std" {
 
   /** Constant for {@link FILE.setvbuf}. Declares that the buffer mode should be 'no buffering'. */
   export var _IONBF: number;
-
-  /** Manually invoke the cycle removal algorithm (garbage collector). The cycle removal algorithm is automatically started when needed, so this function is useful in case of specific memory constraints or for testing. */
-  export function gc(): void;
 
   /** Return the value of the environment variable `name` or `undefined` if it is not defined. */
   export function getenv(name: string): string | undefined;
@@ -5016,7 +5156,7 @@ declare module "quickjs:os" {
   export function dup2(oldfd: number, newfd: number): number;
 
   /** `pipe` Unix system call. Return two handles as `[read_fd, write_fd]`. */
-  export function pipe(): null | [number, number];
+  export function pipe(): [number, number];
 
   /** Sleep for `delay_ms` milliseconds. */
   export function sleep(delay_ms: number): void;
@@ -5132,70 +5272,11 @@ declare module "quickjs:os" {
 declare var setTimeout: typeof import("quickjs:os").setTimeout;
 declare var clearTimeout: typeof import("quickjs:os").clearTimeout;
 
-declare type Interval = { [Symbol.toStringTag]: "Interval" };
-
-declare function setInterval(func: (...args: any) => any, ms: number): Interval;
-declare function clearInterval(interval: Interval): void;
-
-interface StringConstructor {
-  /**
-   * Remove leading minimum indentation from the string.
-   * The first line of the string must be empty.
-   *
-   * https://github.com/tc39/proposal-string-dedent
-   */
-  dedent: {
-    /**
-     * Remove leading minimum indentation from the string.
-     * The first line of the string must be empty.
-     *
-     * https://github.com/tc39/proposal-string-dedent
-     */
-    (input: string): string;
-
-    /**
-     * Remove leading minimum indentation from the template literal.
-     * The first line of the string must be empty.
-     *
-     * https://github.com/tc39/proposal-string-dedent
-     */
-    (
-      strings: readonly string[] | ArrayLike<string>,
-      ...substitutions: any[]
-    ): string;
-
-    /**
-     * Wrap another template tag function such that tagged literals
-     * become dedented before being passed to the wrapped function.
-     *
-     * https://www.npmjs.com/package/string-dedent#usage
-     */
-    <
-      Func extends (
-        strings: readonly string[] | ArrayLike<string>,
-        ...substitutions: any[]
-      ) => string
-    >(
-      input: Func
-    ): Func;
-  };
-}
-
 /**
- * A global which lets you configure the module loader (import/export/require).
- * You can use these properties to add support for importing new filetypes.
- *
- * This global can also be used to identify whether an object is a module
- * namespace record.
+ * An object which lets you configure the module loader (import/export/require).
+ * You can change these properties to add support for importing new filetypes.
  */
-interface ModuleGlobal {
-  /**
-   * Returns true if `target` is a module namespace object.
-   */
-  [Symbol.hasInstance](target: any): target is {
-    [key: string | number | symbol]: any;
-  };
-
+interface ModuleDelegate {
   /**
    * A list of filetype extensions that may be omitted from an import specifier
    * string.
@@ -5207,7 +5288,7 @@ interface ModuleGlobal {
    * See the doc comment on {@link require} for more information.
    *
    * NOTE: If you add a new extension to this array, you will likely also want
-   * to add to {@link Module.compilers}.
+   * to add to {@link compilers}.
    */
   searchExtensions: Array<string>;
 
@@ -5234,7 +5315,7 @@ interface ModuleGlobal {
    * ```js
    * import * as std from "std";
    *
-   * Module.compilers[".txt"] = (filename, content) => {
+   * ModuleDelegate.compilers[".txt"] = (filename, content) => {
    *   return `export default ${JSON.stringify(content)}`;
    * }
    * ```
@@ -5248,24 +5329,20 @@ interface ModuleGlobal {
    * And `names` will be a string containing the contents of names.txt.
    *
    * NOTE: When adding to this object, you may also wish to add to
-   * {@link Module.searchExtensions}.
+   * {@link searchExtensions}.
    */
   compilers: {
     [extensionWithDot: string]: (filename: string, content: string) => string;
   };
 
   /**
-   * Create a virtual built-in module whose exports consist of the own
-   * enumerable properties of `obj`.
-   */
-  define(name: string, obj: { [key: string]: any }): void;
-
-  /**
-   * Resolves a require/import request from `fromFile` into a canonicalized path.
+   * Resolves a require/import request from `fromFile` into a canonicalized
+   * path.
    *
    * To change native module resolution behavior, replace this function with
    * your own implementation. Note that you must handle
-   * `Module.searchExtensions` yourself in your replacement implementation.
+   * `ModuleDelegate.searchExtensions` yourself in your replacement
+   * implementation.
    */
   resolve(name: string, fromFile: string): string;
 
@@ -5273,14 +5350,11 @@ interface ModuleGlobal {
    * Reads the contents of the given resolved module name into a string.
    *
    * To change native module loading behavior, replace this function with your
-   * own implementation. Note that you must handle `Module.compilers` yourself
-   * in your replacement implementation.
+   * own implementation. Note that you must handle `ModuleDelegate.compilers`
+   * yourself in your replacement implementation.
    */
   read(modulePath: string): string;
 }
-
-// global added by QJMS_AddModuleGlobal
-declare var Module: ModuleGlobal;
 
 interface RequireFunction {
   /**
@@ -5290,8 +5364,8 @@ interface RequireFunction {
    *
    * If `source` does not have a file extension, and a file without an extension
    * cannot be found, the engine will check for files with the extensions in
-   * {@link Module.searchExtensions}, and use one of those if present. This
-   * behavior also happens when using normal `import` statements.
+   * {@link ModuleDelegate.searchExtensions}, and use one of those if present.
+   * This behavior also happens when using normal `import` statements.
    *
    * For example, if you write:
    *
@@ -5300,20 +5374,20 @@ interface RequireFunction {
    * ```
    *
    * but there's no file named `somewhere` in the same directory as the file
-   * where that import appears, and `Module.searchExtensions` is the default
-   * value:
+   * where that import appears, and `ModuleDelegate.searchExtensions` is the
+   * default value:
    *
    * ```js
    * [".js"]
    * ```
    *
    * then the engine will look for `somewhere.js`. If that doesn't exist, the
-   * engine will look for `somewhere/index.js`. If *that* doesn't exist, an error
-   * will be thrown.
+   * engine will look for `somewhere/index.js`. If *that* doesn't exist, an
+   * error will be thrown.
    *
-   * If you add more extensions to `Module.searchExtensions`, then the engine
-   * will use those, too. It will search in the same order as the strings appear
-   * in the `Module.searchExtensions` array.
+   * If you add more extensions to `ModuleDelegate.searchExtensions`, then the
+   * engine will use those, too. It will search in the same order as the strings
+   * appear in the `ModuleDelegate.searchExtensions` array.
    */
   (source: string): any;
 
@@ -5323,7 +5397,7 @@ interface RequireFunction {
   resolve: (source: string) => string;
 }
 
-// global added by QJMS_AddRequireGlobal
+// global added by QJMS_InitContext
 declare var require: RequireFunction;
 
 // gets set per-module by QJMS_SetModuleImportMeta
@@ -5353,13 +5427,115 @@ interface ImportMeta {
    *
    * Equivalent to `globalThis.require.resolve`.
    *
-   * Behaves similarly to [the browser import.meta.resolve](https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Operators/import.meta/resolve),
+   * Behaves similarly to [the browser
+   * import.meta.resolve](https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Operators/import.meta/resolve),
    * but it does not ensure that the returned string is a valid URL, because it
-   * delegates directly to {@link Module.resolve} to resolve the name. If you
-   * want this to return URL strings, change `Module.resolve` and `Module.read`
-   * to work with URL strings.
+   * delegates directly to {@link ModuleDelegate.resolve} to resolve the name.
+   * If you want this to return URL strings, change `ModuleDelegate.resolve` and
+   * `ModuleDelegate.read` to work with URL strings.
    */
   resolve: RequireFunction["resolve"];
+}
+
+declare module "quickjs:engine" {
+  /**
+   * Return whether the provided resolved module path is set as the main module.
+   *
+   * In other words, return what the value of `import.meta.main` would be within
+   * the module.
+   *
+   * The main module can be set via {@link setMainModule}.
+   */
+  export function isMainModule(resolvedFilepath: string): boolean;
+
+  /**
+   * Set the main module to the module with the provided resolved path.
+   *
+   * This will affect the value of `import.meta.main` for modules loaded in the
+   * future, but it will NOT retroactively change the value of
+   * `import.meta.main` in existing already-loaded modules.
+   */
+  export function setMainModule(resolvedFilepath: string): void;
+
+  /**
+   * Evaluate the string `code` as a script (global eval).
+   *
+   * @param code - The code to evaluate.
+   * @param options - An optional object containing the following optional properties:
+   * @property backtraceBarrier - Boolean (default = false). If true, error backtraces do not list the stack frames below the evalScript.
+   * @property filename - String (default = "<evalScript>"). The filename to associate with the code being executed.
+   * @returns The result of the evaluation.
+   */
+  export function evalScript(
+    code: string,
+    options?: { backtraceBarrier?: boolean; filename?: string }
+  ): any;
+
+  /**
+   * Evaluate the file `filename` as a script (global eval).
+   *
+   * @param filename - The relative or absolute path to the file to load. Relative paths are resolved relative to the process's current working directory.
+   * @returns The result of the evaluation.
+   */
+  export function runScript(filename: string): any;
+
+  /**
+   * Evaluate the file `filename` as a module. Effectively a synchronous dynamic `import()`.
+   *
+   * @param filename - The relative or absolute path to the file to import. Relative paths are resolved relative to the file calling `importModule`, or `basename` if present.
+   * @param basename - If present and `filename` is a relative path, `filename` will be resolved relative to this basename.
+   * @returns The result of the evaluation (module namespace object).
+   */
+  export function importModule(
+    filename: string,
+    basename?: string
+  ): { [key: string]: any };
+
+  /**
+   * Return the resolved path to a module.
+   *
+   * @param filename - The relative or absolute path to the file to import. Relative paths are resolved relative to the file calling `importModule`, or `basename` if present.
+   * @param basename - If present and `filename` is a relative path, `filename` will be resolved relative to this basename.
+   * @returns The resolved module path.
+   */
+  export function resolveModule(filename: string, basename?: string): string;
+
+  /**
+   * Read the script of module filename from an active stack frame, then return it as a string.
+   *
+   * If there isn't a valid filename for the specified stack frame, an error will be thrown.
+   *
+   * @param stackLevels - How many levels up the stack to search for a filename. Defaults to 0, which uses the current stack frame.
+   */
+  export function getFileNameFromStack(stackLevels?: number): string;
+
+  /**
+   * Returns true if `target` is a module namespace object.
+   */
+  export function isModuleNamespace(target: any): boolean;
+
+  /**
+   * Create a virtual built-in module whose exports consist of the own
+   * enumerable properties of `obj`.
+   */
+  export function defineBuiltinModule(
+    name: string,
+    obj: { [key: string]: any }
+  ): void;
+
+  /**
+   * An object which lets you configure the module loader (import/export/require).
+   * You can change these properties to add support for importing new filetypes.
+   */
+  export const ModuleDelegate: ModuleDelegate;
+
+  /**
+   * Manually invoke the cycle removal algorithm (garbage collector).
+   *
+   * The cycle removal algorithm is automatically started when needed, so this
+   * function is useful in case of specific memory constraints or for testing.
+   */
+  export function gc(): void;
 }
 
 declare module "quickjs:bytecode" {
@@ -5370,7 +5546,11 @@ declare module "quickjs:bytecode" {
    */
   export function fromFile(
     path: string,
-    options?: { byteSwap?: boolean; sourceType?: "module" | "script" }
+    options?: {
+      byteSwap?: boolean;
+      sourceType?: "module" | "script";
+      encodedFileName?: string;
+    }
   ): ArrayBuffer;
 
   /**
@@ -5433,6 +5613,10 @@ declare module "quickjs:context" {
      * - Symbol
      * - eval (but it doesn't work unless the `eval` option is enabled)
      * - globalThis
+     *
+     * Note that new contexts don't have a `scriptArgs` global. If you need one
+     * to be present in the new context, you can add one onto the Context's
+     * `globalThis` property.
      */
     constructor(options?: {
       /** Enables `Date`. Defaults to `true` */
@@ -5510,32 +5694,22 @@ declare module "quickjs:context" {
        */
       operators?: boolean;
 
-      /** Enables "use math". Defaults to `true`. */
+      /** Enables `"use math"`. Defaults to `true`. */
       useMath?: boolean;
 
+      /** Enables `inspect`. Defaults to `true`. */
+      inspect?: boolean;
+      /** Enables `console`. Defaults to `true`. */
+      console?: boolean;
+      /** Enables `print`. Defaults to `true`. */
+      print?: boolean;
+      /** Enables `require`. Defaults to `true`. */
+      moduleGlobals?: boolean;
       /**
-       * Enables:
-       *
-       * - inspect
-       * - console
-       * - print
-       * - require (and require.resolve)
-       * - setTimeout
-       * - clearTimeout
-       * - setInterval
-       * - clearInterval
-       * - String.cooked
-       * - String.dedent
-       *
-       * Defaults to `true`.
-       *
-       * NOTE: The following globals, normally part of `js_std_add_helpers`, are NEVER added:
-       *
-       * - scriptArgs
-       *
-       * If you need them in the new context, copy them over from your context's globalThis onto the child context's globalThis.
+       * Enables `setTimeout`, `clearTimeout`, `setInterval`, and
+       * `clearInterval`. Defaults to `true`.
        */
-      stdHelpers?: boolean;
+      timers?: boolean;
 
       /** Enable builtin modules. */
       modules?: {
@@ -5547,6 +5721,10 @@ declare module "quickjs:context" {
         "quickjs:bytecode"?: boolean;
         /** Enables the "quickjs:context" module. Defaults to `true`. */
         "quickjs:context"?: boolean;
+        /** Enables the "quickjs:engine" module. Defaults to `true`. */
+        "quickjs:engine"?: boolean;
+        /** Enables the "quickjs:encoding" module. Defaults to `true`. */
+        "quickjs:encoding"?: boolean;
       };
     });
 
@@ -5566,5 +5744,16 @@ declare module "quickjs:context" {
   }
 }
 
+// WHATWG encoding spec at https://encoding.spec.whatwg.org/ would be better,
+// but this is better than nothing
+declare module "quickjs:encoding" {
+  export function toUtf8(input: ArrayBuffer): string;
+  export function fromUtf8(input: string): ArrayBuffer;
+}
+
 declare const std: typeof import("quickjs:std");
 declare const os: typeof import("quickjs:os");
+
+// undocumented from quickjs, but it's there
+/** Get the current unix timestamp with microsecond precision. */
+declare function __date_clock(): number;
