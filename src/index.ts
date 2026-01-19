@@ -8,20 +8,13 @@ logger.info = () => {};
 
 globalThis.prompt = defaultPrompt;
 
+const t_BoringExecResult = types.objectWithOnlyTheseProperties({
+  status: 0,
+  signal: types.undefined,
+});
 function isBoringExecResult(value: unknown) {
-  // {
-  //   status: 0
-  //   signal: undefined
-  // }
-
   try {
-    return (
-      typeof value === "object" &&
-      value != null &&
-      Object.keys(value).length === 2 &&
-      (value as any).status === 0 &&
-      (value as any).signal === undefined
-    );
+    return is(value, t_BoringExecResult);
   } catch (err) {
     return false;
   }
