@@ -4,47 +4,19 @@
 // ---------------
 // ===============
 /**
- * Prints help and usage text about the provided value, if any is available.
+ * Prints a link to the YavaScript help docs for the currently-running version
+ * of YavaScript.
+ *
+ * For the latest help docs, see:
+ * https://github.com/suchipi/yavascript/blob/main/meta/generated-docs/README.md
  */
-declare var help: {
-  /**
-   * Prints help and usage text about the provided value, if any is available.
-   */
-  (value?: any): void;
+declare function help(): void;
 
-  /**
-   * Set the help text for the provided value to the provided string.
-   *
-   * If the value is later passed into the `help` function, the provided text
-   * will be printed.
-   */
-  setHelpText: {
-    /**
-     * Set the help text for the provided value to the provided string.
-     *
-     * If the value is later passed into the `help` function, the provided text
-     * will be printed.
-     *
-     * To set help text for the values `null` or `undefined`, `allowNullish`
-     * must be `true`.
-     */
-    (value: object, text: string, allowNullish?: boolean): void;
-
-    /**
-     * Lazily sets the help text for the provided value using the provided
-     * string-returning function.
-     *
-     * The first time help text is requested for the value, the string-returning
-     * function will be called, and its result will be registered as the help
-     * text for the value. Afterwards, the function will not be called again;
-     * instead, it will re-use the text returned from the first time the
-     * function was called.
-     */
-    lazy(value: object, getText: () => string): void;
-  };
-};
-
-/** Info about the currently-running yavascript binary */
+/**
+ * The `yavascript` global contains metadata about the currently-running
+ * yavascript binary, as well as access to yavascript's compilers for
+ * compile-to-js languages.
+ */
 declare const yavascript: {
   /**
    * The version of the currently-running yavascript binary.
@@ -65,51 +37,110 @@ declare const yavascript: {
    */
   version: string;
 
-  /** The processor architecture we're running on. */
+  /**
+   * The processor architecture of the currently-running `yavascript` binary.
+   */
   arch: "x86_64" | "arm64";
 
   /**
-   * The version of the ecma262 standard supported by the currently-running yavascript binary.
+   * The version of the ecma262 standard supported by the currently-running
+   * yavascript binary.
    *
-   * Will always be in the format "ES" + a year. Is never lower than ES2020.
+   * Currently, this is always "ES2020", but if future versions of yavascript
+   * support a newer version of the standard, this will change. In that event,
+   * this property will always be in the format of "ES" + a year, and will never
+   * be lower than ES2020.
    */
   ecmaVersion: string;
 
-  /** The compilers yavascript uses internally to load files. */
+  /**
+   * The compilers yavascript uses internally to load files.
+   *
+   * Each function returns a JavaScript source code string.
+   */
   compilers: {
+    /**
+     * The function yavascript uses internally to load JavaScript files.
+     *
+     * You might think this would be a no-op, but we do some CommonJS/ECMAScript
+     * Module interop transformations here.
+     */
     js(
       code: string,
-      options?: { filename?: string; expression?: boolean }
+      options?: { filename?: string; expression?: boolean },
     ): string;
 
+    /**
+     * The function yavascript uses internally to load [TypeScript JSX](https://www.typescriptlang.org/docs/handbook/jsx.html) files.
+     *
+     * yavascript uses [Sucrase 3.35.0](https://sucrase.io/) to load TypeScript JSX syntax. yavascript doesn't do typechecking of TypeScript syntax.
+     */
     tsx(
       code: string,
-      options?: { filename?: string; expression?: boolean }
+      options?: { filename?: string; expression?: boolean },
     ): string;
 
+    /**
+     * The function yavascript uses internally to load [TypeScript](https://www.typescriptlang.org/) files.
+     *
+     * yavascript uses [Sucrase 3.35.0](https://sucrase.io/) to load TypeScript syntax. yavascript doesn't do typechecking of TypeScript syntax.
+     */
     ts(
       code: string,
-      options?: { filename?: string; expression?: boolean }
+      options?: { filename?: string; expression?: boolean },
     ): string;
 
+    /**
+     * The function yavascript uses internally to load JSX files.
+     *
+     * yavascript uses [Sucrase 3.35.0](https://sucrase.io/) to load JSX syntax.
+     *
+     * See {@link JSX} for info about configuring JSX pragma, swapping out the
+     * default `createElement` implementation, etc.
+     */
     jsx(
       code: string,
-      options?: { filename?: string; expression?: boolean }
+      options?: { filename?: string; expression?: boolean },
     ): string;
 
+    /**
+     * The function yavascript uses internally to load [CoffeeScript](https://coffeescript.org/) files.
+     *
+     * yavascript embeds CoffeeScript 2.7.0.
+     */
     coffee(
       code: string,
-      options?: { filename?: string; expression?: boolean }
+      options?: { filename?: string; expression?: boolean },
     ): string;
 
+    /**
+     * The function yavascript uses internally to load [Civet](https://civet.dev/) files.
+     *
+     * yavascript embeds Civet 0.9.0.
+     */
     civet(
       code: string,
-      options?: { filename?: string; expression?: boolean }
+      options?: { filename?: string; expression?: boolean },
     ): string;
 
+    /**
+     * The function yavascript uses internally to load files which don't have an
+     * extension.
+     *
+     * It tries to parse the file as each of the following languages, in order,
+     * until it finds one which doesn't have a syntax error:
+     *
+     * - JSX
+     * - TSX
+     * - Civet
+     * - CoffeeScript
+     *
+     * If none of the languages work, the file's original content gets used so
+     * that a syntax error can be reported to the user.
+     */
     autodetect(
       code: string,
-      options?: { filename?: string; expression?: boolean }
+      options?: { filename?: string; expression?: boolean },
     ): string;
   };
 };
@@ -123,9 +154,35 @@ declare const yavascript: {
 declare const env: { [key: string]: string | undefined };
 
 /**
- * Parse command line --flags into an object of flags and an array of
- * positional arguments. This function is opinionated; if it doesn't meet your
- * needs, you can parse the `scriptArgs` global manually.
+ * A function which reads an environment variable and returns an appropriate
+ * boolean based on the string value of the environment variable.
+ *
+ * - If the environment variable is not set, The `fallback` parameter is returned.
+ * - If the value is "1", "true", "True", or "TRUE", the boolean `true` is returned.
+ * - If the value is "0", "false", "False", or "FALSE", the boolean `false` is returned.
+ * - If the environment variable is defined but its value isn't one of the
+ *   values listed above, a warning is printed and the `fallback` parameter is returned.
+ *
+ * Generally, the `fallback` parameter is set to `true`, `false`, or `null`.
+ *
+ * @param key The environment variable to read.
+ * @param fallback Value to return if the environment variable is unset or not
+ * coercable to boolean.
+ * @param logging logger override for the warning printed when an environment
+ * variable has an unsupported value. Defaults to {@link logger}.
+ */
+declare function readEnvBool<T>(
+  key: string,
+  fallback: T,
+  logging?: {
+    warn?: (...args: Array<any>) => void;
+  },
+): boolean | T;
+
+/**
+ * A function which parses command line `--flags` into an object of flags and an
+ * array of positional arguments. This function is opinionated; if it doesn't
+ * meet your needs, you can parse the {@link scriptArgs} global manually.
  *
  * Flags `--like-this`, `--like_this`, or `--LIKE_THIS` get converted into
  * property names `likeThis` on the returned flags object.
@@ -136,34 +193,145 @@ declare const env: { [key: string]: string | undefined };
  * Anything that appears after `--` is considered a positional argument instead
  * of a flag. `--` is not present in the returned positional arguments Array.
  *
- * @param hints - An object whose keys are flag names (in camelCase) and whose values indicate what type to treat that flag as. Valid property values are `String`, `Boolean`, `Number`, and `Path`. `Path` will resolve relative paths into absolute paths for you. If no hints object is specified, `parseScriptArgs` will do its best to guess, based on the command-line args.
- * @param argv - An array containing the command line flags you want to parse. If unspecified, `scriptArgs.slice(2)` will be used (we slice 2 in order to skip the yavascript binary and script name). If you pass in an array here, it should only contain command-line flags, not the binary being called.
+ * `parseScriptArgs` accepts two optional parameters: `hints` and `argv`.
  *
- * @returns An object with three properties: `flags`, `args`, and `metadata`. `flags` is an object whose keys are camelCase flag names and whose values are strings, booleans, numbers, or `Path`s corresponding to the input command-line args. `args` is an Array of positional arguments, as found on the command-line. `metadata` contains information about what name and type the flags got mapped to.
+ * ## hints
+ *
+ * If present, `hints` should be an object whose keys are flag names (in
+ * lowerCamelCase) and whose values indicate what type to treat that flag as.
+ * Valid property values are `String`, `Boolean`, `Number`, and `Path`. `Path`
+ * will resolve relative paths into absolute paths for you. If no hints object
+ * is specified, `parseScriptArgs` will do its best to guess the types.
+ *
+ * ## argv
+ *
+ * The `argv` parameter, if present, should be an array containing the command
+ * line flags you want to parse. If you don't provide one, `scriptArgs.slice(2)`
+ * will be used (we slice 2 in order to skip the yavascript binary and script
+ * name). If you pass in an array here, it should only contain command-line
+ * flags, not the binary being called.
+ *
+ * ## Return Value
+ *
+ * `parseScriptArgs` returns an object with three properties: `flags`, `args`,
+ * and `metadata`.
+ *
+ * - `flags` is an object whose keys are lowerCamelCase flag names and whose
+ *   values are strings, booleans, numbers, or `Path`s corresponding to the
+ *   input command-line args.
+ * - `args` is an Array of positional arguments, as found on the command-line.
+ * - `metadata` contains information about what name and type the flags got
+ *   mapped to.
+ *
+ * @param hints - An object whose keys are flag names (in lowerCamelCase) and
+ * whose values indicate what type to treat that flag as. Valid property values
+ * are `String`, `Boolean`, `Number`, and `Path`. `Path` will resolve relative
+ * paths into absolute paths for you. If no hints object is specified,
+ * `parseScriptArgs` will do its best to guess, based on the command-line args.
+ * @param argv - An array containing the command line flags you want to parse.
+ * If unspecified, `scriptArgs.slice(2)` will be used (we slice 2 in order to
+ * skip the yavascript binary and script name). If you pass in an array here, it
+ * should only contain command-line flags, not the binary being called.
+ *
+ * @returns A {@link ParseScriptArgsResult}, which is an object with three
+ * properties: `flags`, `args`, and `metadata`. `flags` is an object whose keys
+ * are camelCase flag names and whose values are strings, booleans, numbers, or
+ * `Path`s corresponding to the input command-line args. `args` is an Array of
+ * positional arguments, as found on the command-line. `metadata` contains
+ * information about what name and type the flags got mapped to.
  */
 declare function parseScriptArgs(
   hints?: {
     [key: string]: typeof String | typeof Boolean | typeof Number | typeof Path;
   },
-  args?: Array<string>
-): {
+  args?: Array<string>,
+): ParseScriptArgsResult;
+
+/**
+ * The return type of {@link parseScriptArgs}.
+ *
+ * The `flags` property contains the values for any command-line `--flags`, with
+ * key names converted to `lowerCamelCase`.
+ *
+ * The `args` property contains an array of those command-line arguments which
+ * weren't associated with a flag.
+ *
+ * The `metadata` property contains information about the parsing process,
+ * including what case changes were applied to the keys, which hints were used,
+ * and which properties had their type guessed because no corresponding hint was
+ * available.
+ */
+declare interface ParseScriptArgsResult {
+  /**
+   * The values for any command-line `--flags`, with key names converted to `lowerCamelCase`.
+   */
   flags: { [key: string]: any };
+  /**
+   * An array of those command-line arguments which weren't associated with a flag.
+   */
   args: Array<string>;
+  /**
+   * Information about the parsing process, including what case changes were
+   * applied to the keys, which hints were used, and which properties had their
+   * type guessed because no corresponding hint was available.
+   */
   metadata: {
+    /**
+     * An object whose keys are the verbatim flags from the command-line, and
+     * whose values are the lowerCamelCase names they were converted to in the
+     * `flags` property of the {@link ParseScriptArgsResult}.
+     */
     keys: {
       [key: string]: string | undefined;
     };
+    /**
+     * An object whose keys are the lowerCamelCase flag names, and whose values
+     * are strings indicating the hint values that were specified for those
+     * flags.
+     */
     hints: {
-      [key: string]: string | undefined;
+      [key: string]: "path" | "number" | "boolean" | "string" | undefined;
     };
+    /**
+     * An object indicating which flags we inferred the type of, because no
+     * corresponding hint was present.
+     *
+     * The keys are the lowerCamelCase flag names, and the values are strings
+     * indicating what type we guessed for that flag.
+     *
+     * If you're seeing incorrect inference, consider passing a `hints` argument
+     * to {@link parseScriptArgs}.
+     */
     guesses: {
-      [key: string]: string | undefined;
+      [key: string]: "number" | "boolean" | "string" | undefined;
     };
   };
-};
+}
 
 /**
  * Read the contents of a file from disk.
+ *
+ * With no options specified, it reads the file as UTF-8 and returns a string:
+ *
+ * ```ts
+ * const contents = readFile("README.md");
+ * console.log(contents);
+ * // "# yavascript\n\nYavaScript is a cross-platform bash-like script runner and repl which is distributed as a single\nstatically-linked binary..."
+ * ```
+ *
+ * But, if you pass `{ binary: true }` as the second argument, it returns an
+ * ArrayBuffer containing the raw bytes from the file:
+ *
+ * ```ts
+ * const contents = readFile("README.md", { binary: true });
+ * console.log(contents);
+ * // ArrayBuffer {
+ * //   │0x00000000│ 23 20 79 61 76 61 73 63 72 69 70 74 0A 0A 59 61
+ * //   │0x00000010│ 76 61 53 63 72 69 70 74 20 69 73 20 61 20 63 72
+ * //   │0x00000020│ 6F 73 73 2D 70 6C 61 74 66 6F 72 6D 20 62 61 73
+ * //   │0x00000030│ 68 2D 6C 69 6B 65 20 73 63 72 69 70 74 20 72 75
+ * // ...
+ * ```
  */
 declare const readFile: {
   /**
@@ -194,7 +362,7 @@ declare const readFile: {
  */
 declare function writeFile(
   path: string | Path,
-  data: string | ArrayBuffer
+  data: string | ArrayBuffer,
 ): void;
 
 /**
@@ -253,6 +421,18 @@ declare function remove(path: string | Path): void;
 declare function exists(path: string | Path): boolean;
 
 /**
+ * Copies a file or folder from one location to another.
+ * Folders are copied recursively.
+ *
+ * Provides the same functionality as the command `cp -R`.
+ */
+declare function copy(
+  from: string | Path,
+  to: string | Path,
+  options?: CopyOptions,
+): void;
+
+/**
  * Options for {@link copy}.
  */
 declare type CopyOptions = {
@@ -295,70 +475,145 @@ declare type CopyOptions = {
 };
 
 /**
- * Copies a file or folder from one location to another.
- * Folders are copied recursively.
- *
- * Provides the same functionality as the command `cp -R`.
- */
-declare function copy(
-  from: string | Path,
-  to: string | Path,
-  options?: CopyOptions
-): void;
-
-/**
  * Rename the file or directory at the specified path.
  *
  * Provides the same functionality as the command `mv`.
  */
 declare function rename(from: string | Path, to: string | Path): void;
 
-/** An object that represents a filesystem path. */
+/**
+ * A class which represents a filesystem path. The class contains various
+ * methods that make it easy to work with filesystem paths; there are methods
+ * for adding/removing path components, converting between absolute and relative
+ * paths, getting the basename and dirname, and more.
+ *
+ * All functions in yavascript which accept path strings as arguments also
+ * accept Path objects. As such, it is recommended that all filesystem paths in
+ * your programs are Path objects rather than strings.
+ *
+ * Every Path object has two properties: `segments` and `separator`. `segments`
+ * is an Array of strings containing all the non-slash portions of the path. For
+ * example, the path "one/two/three" would have segments `["one", "two",
+ * "three"]`. `separator` is which slash is used to separate the segments;
+ * either `"/"` or `"\"`.
+ *
+ * A Path object can represent either a POSIX-style path or a win32-style path.
+ * For the win32 style, UNC paths are supported. POSIX-style paths starting with
+ * "/" (eg. "/usr/bin") have an empty string at the beginning of their segments
+ * array to represent the left-hand-side of the leading slash. For instance,
+ * "/usr/bin" would have segments `["", "usr", "bin"]`.
+ */
 declare class Path {
-  /** The character used to separate path segments on this OS. */
+  /**
+   * The character used to separate path segments on the current operating
+   * system where yavascript is running.
+   *
+   * Its value is either a forward slash (`"/"`) or a backslash (`"\"`). Its value
+   * is a backslash on windows, and a forward slash on all other operating
+   * systems.
+   */
   static readonly OS_SEGMENT_SEPARATOR: "/" | "\\";
 
   /**
-   * The character used to separate entries within the PATH environment
-   * variable on this OS.
+   * The character used to separate entries within the system's `PATH`
+   * environment variable on the current operating system where yavascript is
+   * running.
+   *
+   * The `PATH` environment variable contains a list of folders wherein
+   * command-line programs can be found, separated by either a colon (`:`) or a
+   * semicolon (`;`). The value of `OS_ENV_VAR_SEPARATOR` is a semicolon on
+   * windows, and a colon on all other operating systems.
+   *
+   * The `PATH` environment variable can be accessed by yavascript programs via
+   * `env.PATH`. Therefore, one can contain a list of all entries in the `PATH`
+   * environment variable via:
+   *
+   * ```ts
+   * const folders: Array<string> = env.PATH.split(Path.OS_ENV_VAR_SEPARATOR);
+   * ```
    */
   static readonly OS_ENV_VAR_SEPARATOR: ":" | ";";
 
   /**
-   * A list of suffixes that could appear in the filename for a program on the
-   * current OS. For instance, on Windows, programs often end with ".exe".
+   * A Set of filename extension strings that command-line programs may end with
+   * on the current operating system where yavascript is running. For instance,
+   * on Windows, programs often end with ".exe". Each of these strings contains
+   * a leading dot (`.`).
    *
-   * On Unix-like OSes, this is empty. On Windows, it's based on `env.PATHEXT`.
+   * On windows, this value is based on the `PATHEXT` environment variable,
+   * which defaults to ".COM;.EXE;.BAT;.CMD;.VBS;.VBE;.JS;.JSE;.WSF;.WSH;.MSC"
+   * on Windows Vista and up. If `PATHEXT` is not defined, that default value is
+   * used.
+   *
+   * On all other operating systems, this Set is empty.
    */
   static readonly OS_PROGRAM_EXTENSIONS: ReadonlySet<string>;
 
-  /** Split one or more path strings into an array of path segments. */
+  /**
+   * Converts a string (or array of strings) into an array of path segment
+   * strings (the parts between the slashes).
+   *
+   * Example:
+   *
+   * ```ts
+   * const input = ["hi", "there/every/one", "yeah\\yup"];
+   * const result = Path.splitToSegments(input);
+   * // result is ["hi", "there", "every", "one", "yeah", "yup"]
+   * ```
+   */
   static splitToSegments(inputParts: Array<string> | string): Array<string>;
 
   /**
-   * Search the provided path string or strings for a path separator character,
-   * and return it. If none is found, return `fallback`, which defaults to the
-   * OS's path segment separator.
+   * Searches the provided path string or strings for a path separator character
+   * (either forward slash or backslash), and returns the one it finds. If
+   * neither is found, it returns the `fallback` arg, which defaults to the
+   * current OS's path segment separator (`Path.OS_SEGMENT_SEPARATOR`).
    */
   static detectSeparator<Fallback extends string | null = string>(
     input: Array<string> | string,
     // @ts-ignore might be instantiated with a different subtype
-    fallback: Fallback = Path.OS_SEGMENT_SEPARATOR
+    fallback: Fallback = Path.OS_SEGMENT_SEPARATOR,
   ): string | Fallback;
 
   /**
-   * Concatenates the input path(s) and then resolves all non-leading `.` and
-   * `..` segments.
+   * Creates a new Path by concatenating the input path(s) and then resolving all
+   * non-leading `.` and `..` segments. In other words:
+   *
+   * - Segments containing `.` are removed
+   * - Segments containing `..` are removed, along with the segment preceding
+   *   them.
+   *
+   * Note that any `.` or `..` segments at the beginning of the path (ie.
+   * "leading segments") are not removed.
    */
   static normalize(
     ...inputs: Array<string | Path | Array<string | Path>>
   ): Path;
 
   /**
-   * Return whether the provided path is absolute; that is, whether it
-   * starts with either `/` or a drive letter (ie `C:`).
+   * Returns a boolean indicating whether the provided path is absolute; that
+   * is, whether it starts with either a slash (`/` or `\`) or a drive letter
+   * (ie `C:`).
+   *
+   * Note that Windows UNC Paths (eg. `\\MYSERVER\share$\`) are considered
+   * absolute.
    */
   static isAbsolute(path: string | Path): boolean;
+
+  /**
+   * Creates a new Path containing the user-provided segments and separator. In
+   * most cases, you won't need to do this, and can use `new Path(...)` instead.
+   *
+   * If unspecified, the `separator` parameter defaults to
+   * `Path.OS_SEGMENT_SEPARATOR`.
+   */
+  static fromRaw(segments: Array<string>, separator?: string): Path;
+
+  /**
+   * Creates a new Path object using the provided input(s), which will be
+   * concatenated together in order left-to-right.
+   */
+  constructor(...inputs: Array<string | Path | Array<string | Path>>);
 
   /**
    * An array of the path segments that make up this path.
@@ -372,96 +627,95 @@ declare class Path {
   /**
    * The path separator that should be used to turn this path into a string.
    *
-   * Will be either `/` or `\`.
+   * Will be either `"/"` or `"\"`.
    */
   separator: string;
 
-  /** Create a new Path object using the provided input(s). */
-  constructor(...inputs: Array<string | Path | Array<string | Path>>);
-
   /**
-   * Create a new Path object using the provided segments and separator.
+   * Creates a new Path by resolving all non-leading `.` and `..` segments in
+   * the target Path. In other words:
    *
-   * If unspecified, `separator` defaults to `Path.OS_SEGMENT_SEPARATOR`.
-   */
-  static fromRaw(segments: Array<string>, separator?: string): Path;
-
-  /**
-   * Resolve all non-leading `.` and `..` segments in this path.
+   * - Segments containing `.` are removed
+   * - Segments containing `..` are removed, along with the segment preceding
+   *   them.
+   *
+   * Note that any `.` or `..` segments at the beginning of the path (ie.
+   * "leading segments") are not removed.
    */
   normalize(): Path;
 
   /**
-   * Create a new Path by appending additional path segments onto the end of
-   * this Path's segments.
+   * Creates a new Path by appending additional path segments onto the end of
+   * the target Path's segments.
    *
-   * The returned path will use this path's separator.
+   * The returned Path will use the same separator as the target Path.
    */
   concat(...other: Array<string | Path | Array<string | Path>>): Path;
 
   /**
-   * Return whether this path is absolute; that is, whether it starts with
-   * either `/`, `\`, or a drive letter (ie `C:`).
+   * Returns a boolean indicating whether the target Path is absolute; that
+   * is, whether it starts with either a slash (`/` or `\`) or a drive letter
+   * (ie `C:`).
+   *
+   * Note that Windows UNC Paths (eg. `\\MYSERVER\share$\`) are considered
+   * absolute.
    */
   isAbsolute(): boolean;
 
   /**
-   * Make a second Path object containing the same segments and separator as
-   * this one.
+   * Creates a new Path object containing the same segments and separator as
+   * the target Path.
+   *
+   * Note that although it contains the same segments, the new Path does not use
+   * the same Array instance for segments as the target Path is was cloned from.
    */
   clone(): this;
 
   /**
-   * Express this path relative to `dir`.
+   * Creates a new Path which expresses the target Path relative to `dir`.
    *
    * @param dir - The directory to create a new path relative to.
-   * @param options - Options that affect the resulting path.
+   * @param options - Options that affect the resulting path (see {@link PathRelativeToOptions}).
    */
-  relativeTo(
-    dir: Path | string,
-    options?: {
-      /**
-       * Defaults to false. When true, a leading `./` will be omitted from the
-       * path, if present. Note that a leading `../` will never be omitted.
-       */
-      noLeadingDot?: boolean;
-    }
-  ): Path;
+  relativeTo(dir: Path | string, options?: PathRelativeToOptions): Path;
 
   /**
-   * Turn this path into a string by joining its segments using its separator.
+   * Turns the target Path into a string by joining its segments using its
+   * separator as the delimiter.
    */
   toString(): string;
 
   /**
-   * Alias for `toString`; causes Path objects to be serialized as strings when
-   * they (or an object referencing them) are passed into JSON.stringify.
+   * Alias for `toString`. The presence of this method causes Path objects to be
+   * serialized as strings when they (or an object referencing them) get(s) passed
+   * into JSON.stringify.
    */
   toJSON(): string;
 
   /**
-   * Return the final path segment of this path. If this path has no path
-   * segments, the empty string is returned.
+   * Returns the final segment of the target Path. If the target Path has no
+   * segments, an empty string (`""`) is returned.
    */
   basename(): string;
 
   /**
-   * Return the trailing extension of this path. The `options` parameter works
-   * the same as the global `extname`'s `options` parameter.
+   * Returns the trailing file extension of this path.
+   *
+   * @param options - Works the same as the options parameter for the global {@link extname} (see {@link ExtnameOptions}).
    */
-  extname(options?: { full?: boolean }): string;
+  extname(options?: ExtnameOptions): string;
 
   /**
-   * Return a new Path containing all of the path segments in this one except
-   * for the last one; ie. the path to the directory that contains this path.
+   * Creates a new Path containing all of the segments in the target Path except
+   * for the last one; ie. the path to the directory that contains the target Path.
    */
   dirname(): Path;
 
   /**
-   * Return whether this path starts with the provided value, by comparing one
-   * path segment at a time.
+   * Returns a boolean indicating whether the target Path starts with the
+   * provided value, by comparing one path segment at a time.
    *
-   * The starting segments of this path must *exactly* match the segments in the
+   * The starting segments of the target Path must *exactly* match the segments in the
    * provided value.
    *
    * This means that, given two Paths A and B:
@@ -476,10 +730,10 @@ declare class Path {
   startsWith(value: string | Path | Array<string | Path>): boolean;
 
   /**
-   * Return whether this path ends with the provided value, by comparing one
-   * path segment at a time.
+   * Returns a boolean indicating whether the target Path ends with the provided
+   * value, by comparing one path segment at a time.
    *
-   * The ending segments of this path must *exactly* match the segments in the
+   * The ending segments of the target Path must *exactly* match the segments in the
    * provided value.
    *
    * This means that, given two Paths A and B:
@@ -494,75 +748,120 @@ declare class Path {
   endsWith(value: string | Path | Array<string | Path>): boolean;
 
   /**
-   * Return the path segment index at which `value` appears in this path, or
-   * `-1` if it doesn't appear in this path.
+   * Returns the index at which `value` appears in the target Path's segments,
+   * or `-1` if `value` doesn't appear in the target Path.
    *
    * @param value - The value to search for. If the value contains more than one path segment, the returned index will refer to the location of the value's first path segment.
-   * @param fromIndex - The index into this path's segments to begin searching at. Defaults to `0`.
+   * @param fromIndex - The index into the target Path's segments to begin searching at. Defaults to `0`.
    */
   indexOf(
     value: string | Path | Array<string | Path>,
-    fromIndex?: number | undefined
+    fromIndex?: number | undefined,
   ): number;
 
   /**
-   * Return whether `value` appears in this path.
+   * Returns a boolean indicating whether `value` appears in the target Path.
    *
    * @param value - The value to search for.
-   * @param fromIndex - The index into this path's segments to begin searching at. Defaults to `0`.
+   * @param fromIndex - The index into the target Path's segments to begin searching at. Defaults to `0`.
    */
   includes(
     value: string | Path | Array<string | Path>,
-    fromIndex?: number | undefined
+    fromIndex?: number | undefined,
   ): boolean;
 
   /**
-   * Return a new Path wherein the segments in `value` have been replaced with
-   * the segments in `replacement`. If the segments in `value` are not present
-   * in this path, a clone of this path is returned.
+   * Creates a new Path based on the target Path wherein the segments in `value`
+   * have been replaced with the segments in `replacement`. If the segments in
+   * `value` are not present in the target Path, a clone of the target Path is
+   * returned.
    *
-   * Note that only the first match is replaced.
+   * Note that only the first match is replaced. To replace more than one match,
+   * use {@link Path.prototype.replaceAll}.
    *
    * @param value - What should be replaced
    * @param replacement - What it should be replaced with
+   *
+   * See also {@link Path.prototype.replaceLast}.
    */
   replace(
     value: string | Path | Array<string | Path>,
-    replacement: string | Path | Array<string | Path>
+    replacement: string | Path | Array<string | Path>,
   ): Path;
 
   /**
-   * Return a new Path wherein all occurrences of the segments in `value` have
-   * been replaced with the segments in `replacement`. If the segments in
-   * `value` are not present in this path, a clone of this path is returned.
+   * Creates a new Path based on the target Path wherein all occurrences of the
+   * segments in `value` have been replaced with the segments in `replacement`.
+   * If the segments in `value` are not present in the target Path, a clone of
+   * the target Path is returned.
+   *
+   * Note that all matches are replaced. To replace only the first match,
+   * use {@link Path.prototype.replace}.
    *
    * @param value - What should be replaced
    * @param replacement - What it should be replaced with
+   *
+   * See also {@link Path.prototype.replaceLast}.
    */
   replaceAll(
     value: string | Path | Array<string | Path>,
-    replacement: string | Path | Array<string | Path>
+    replacement: string | Path | Array<string | Path>,
   ): Path;
 
   /**
-   * Return a copy of this path but with the final segment replaced with `replacement`
+   * Creates a new Path based on the target Path but with the final segment
+   * replaced with `replacement`.
+   *
+   * If the target Path has no segments, the newly created Path will be the same
+   * as `new Path(replacement)`; ie. non-empty.
    *
    * @param replacement - The new final segment(s) for the returned Path
    */
   replaceLast(replacement: string | Path | Array<string | Path>): Path;
+
+  /**
+   * Return a boolean indicating whether this Path has the same separator and
+   * segments as another Path.
+   *
+   * To check only segments and not separator, use {@link Path.prototype.hasEqualSegments}.
+   */
+  equals(other: string | Path | Array<string | Path>): boolean;
+
+  /**
+   * Return a boolean indicating whether this Path has the same segments as
+   * another Path. **Separator is not checked; use {@link Path.prototype.equals} for that.**
+   */
+  hasEqualSegments(other: string | Path | Array<string | Path>): boolean;
 }
 
 /**
- * The absolute path to the current file (whether script or module).
+ * Options for {@link Path.prototype.relativeTo}.
+ */
+declare interface PathRelativeToOptions {
+  /**
+   * Defaults to false. When true, a leading `./` will be omitted from the
+   * path, if present. Note that a leading `../` will never be omitted.
+   */
+  noLeadingDot?: boolean;
+}
+
+/**
+ * The absolute path to the currently-executing file (whether script or module).
  *
- * Behaves the same as in Node.js, except that it's also present within ES modules.
+ * Behaves the same as in Node.js, except that it's also present within ES
+ * modules.
+ *
+ * Example: `/home/suchipi/some-folder/some-file.js`
  */
 declare var __filename: string;
 
 /**
- * The absolute path to the directory the current file is inside of.
+ * The absolute path to the directory containing the currently-executing file.
  *
- * Behaves the same as in Node.js, except that it's also present within ES modules.
+ * Behaves the same as in Node.js, except that it's also present within ES
+ * modules.
+ *
+ * Example: `/home/suchipi/some-folder`
  */
 declare var __dirname: string;
 
@@ -570,12 +869,20 @@ declare var __dirname: string;
  * Return the last component of a path string.
  *
  * Provides the same functionality as the unix binary of the same name.
+ *
+ * > Example: `basename("/home/suchipi/something")` returns `"something"`, the last part.
  */
 declare function basename(path: string | Path): string;
 
 /**
  * Reads the contents of one or more files from disk as either one UTF-8 string
  * or one ArrayBuffer.
+ *
+ * Provides the same functionality as the unix binary of the same name.
+ *
+ * > Example: If you have a file called `hi.txt` in the current working
+ * > directory, and it contains the text "hello", running `cat("hi.txt")`
+ * > returns `"hello"`.
  */
 declare const cat: {
   /**
@@ -593,7 +900,7 @@ declare const cat: {
    */
   (
     paths: string | Path | Array<string | Path>,
-    options: { binary: false }
+    options: { binary: false },
   ): string;
 
   /**
@@ -601,71 +908,149 @@ declare const cat: {
    */
   (
     paths: string | Path | Array<string | Path>,
-    options: { binary: true }
+    options: { binary: true },
   ): ArrayBuffer;
 };
 
 /**
- * Change the process's current working directory to the specified path. If no
+ * Changes the process's current working directory to the specified path. If no
  * path is specified, moves to the user's home directory.
  *
  * Provides the same functionality as the shell builtin of the same name.
  */
 declare function cd(path?: string | Path): void;
 
-/** A string representing who a permission applies to. */
-declare type ChmodPermissionsWho =
-  | "user"
-  | "group"
-  | "others"
-  | "all"
-  | "u"
-  | "g"
-  | "o"
-  | "a"
-  | "ug"
-  | "go"
-  | "uo";
-
-/** A string representing the access level for the given permission. */
-declare type ChmodPermissionsWhat =
-  | "read"
-  | "write"
-  | "execute"
-  | "readwrite"
-  | "none"
-  | "full"
-  | "r"
-  | "w"
-  | "x"
-  | "rw"
-  | "rx"
-  | "wx"
-  | "rwx";
-
 /**
  * Set the permission bits for the specified file.
  *
- * @param permissions The permission bits to set. This can be a number, a string containing an octal number, or an object.
- * @param path The path to the file.
+ * Provides the same functionality as the unix binary of the same name.
  */
-declare function chmod(
-  permissions:
-    | number
-    | string
-    | Record<ChmodPermissionsWho, ChmodPermissionsWhat>,
-  path: string | Path
-): void;
+declare const chmod: Chmod;
+
+/**
+ * The interface for the global function `chmod`, which has two call signatures.
+ */
+interface Chmod {
+  /**
+   * Set the permission bits for the specified file.
+   *
+   * Provides the same functionality as the unix binary of the same name.
+   *
+   * @param permissions The permission bits to set. This can be a number, or a string containing an octal number.
+   * @param path The path to the file.
+   */
+  (permissions: number | string, path: string | Path): void;
+
+  /**
+   * Apply a change to the permission bits for the specified file.
+   *
+   * Provides the same functionality as the unix binary of the same name.
+   *
+   * @param operation What to do to the bits; can be "add", "set", or "remove".
+   * @param permissions An object describing the changes (see below).
+   * @param path The path to the file.
+   *
+   * Each of the `permissions` object's own property keys must be one of these
+   * strings:
+   *
+   * - `"user"`
+   * - `"group"`
+   * - `"others"`
+   * - `"all"` (meaning "user", "group", and "others")
+   * - `"u"` (alias for "user")
+   * - `"g"` (alias for "group")
+   * - `"o"` (alias for "others")
+   * - `"a"` (alias for "all")
+   * - `"ug"` ("user" plus "group")
+   * - `"go"` ("group" plus "others")
+   * - `"uo"` ("user" plus "others")
+   *
+   * and their values must be one of these strings:
+   *
+   * - `"read"` (permission to read the contents of the file)
+   * - `"write"` (permission to write to the file's contents)
+   * - `"execute"` (permission to run the file as an executable)
+   * - `"readwrite"` (both "read" and "write")
+   * - `"none"` (no permissions)
+   * - `"full"` ("read", "write", and "execute")
+   * - `"r"` (alias for "read")
+   * - `"w"` (alias for "write")
+   * - `"x"` (alias for "execute")
+   * - `"rw"` (alias for "readwrite")
+   * - `"rx"` ("read" and "execute")
+   * - `"wx"` ("write" and "execute")
+   * - `"rwx"` (alias for "full")
+   *
+   * Some example objects:
+   *
+   * ```json
+   * { user: "readwrite", group: "read", others: "none" }
+   * { ug: "rw", o: "w" }
+   * { all: "full" }
+   * ```
+   */
+  <Operation extends Chmod.Operation>(
+    operation: Operation,
+    permissions: Operation extends "set"
+      ? Record<Chmod.Who, Chmod.Permission>
+      : Partial<Record<Chmod.Who, Chmod.Permission>>,
+    path: string | Path,
+  ): void;
+}
+
+declare namespace Chmod {
+  /** A string representing who a permission applies to. */
+  export type Who =
+    | "user"
+    | "group"
+    | "others"
+    | "all"
+    | "u"
+    | "g"
+    | "o"
+    | "a"
+    | "ug"
+    | "go"
+    | "uo";
+
+  /** A string representing how the permissions should be changed. */
+  export type Operation = "add" | "set" | "remove";
+
+  /** A string representing the access level for the given permission. */
+  export type Permission =
+    | "read"
+    | "write"
+    | "execute"
+    | "readwrite"
+    | "none"
+    | "full"
+    | "r"
+    | "w"
+    | "x"
+    | "rw"
+    | "rx"
+    | "wx"
+    | "rwx";
+}
 
 /**
  * Removes the final component from a path string.
  *
  * Provides the same functionality as the unix binary of the same name.
+ *
+ * > Example: `dirname("/home/suchipi/something")` returns
+ * > `"/home/suchipi"`, everything except the last part.
  */
 declare function dirname(path: string | Path): Path;
 
 /**
  * Print one or more values to stdout.
+ *
+ * Provides the same functionality as the shell builtin of the same name.
+ *
+ * > NOTE: This can print any value, not just strings.
+ *
+ * `echo` is functionally identical to `console.log`.
  */
 declare const echo: typeof console.log;
 
@@ -679,6 +1064,9 @@ declare const echo: typeof console.log;
  *
  * `exit.code` will also be used as the exit status code for the yavascript
  * process if the process exits normally.
+ *
+ * > Attempting to call `exit` or set `exit.code` within a Worker will fail and
+ * > throw an error.
  */
 declare const exit: {
   (code?: number): never;
@@ -688,18 +1076,34 @@ declare const exit: {
 /**
  * Returns the file extension of the file at a given path.
  *
- * If the file has no extension (eg `Makefile`, etc), then `''` will be returned.
+ * If the file has no extension (eg `Makefile`, etc), then `''` will be
+ * returned.
  *
- * Pass `{ full: true }` to get compound extensions, eg `.d.ts` or `.test.js` instead of just `.ts`/`.js`.
+ * @param pathOrFilename The input path
+ * @param options Options which affect the return value. See {@link ExtnameOptions}.
  */
 declare function extname(
   pathOrFilename: string | Path,
-  options?: { full?: boolean }
+  options?: ExtnameOptions,
 ): string;
+
+/**
+ * Options for {@link extname} and {@link Path.prototype.extname}.
+ */
+declare interface ExtnameOptions {
+  /**
+   * Whether to get compound extensions, like `.d.ts` or `.test.js`, instead of
+   * just the final extension (`.ts` or `.js` in this example).
+   */
+  full?: boolean;
+}
 
 /**
  * Returns the contents of a directory, as absolute paths. `.` and `..` are
  * omitted.
+ *
+ * If `ls()` is called with no directory, the present working directory
+ * (`pwd()`) is used.
  */
 declare function ls(dir?: string | Path): Array<Path>;
 
@@ -717,7 +1121,7 @@ declare function mkdir(
       trace?: (...args: Array<any>) => void;
       info?: (...args: Array<any>) => void;
     };
-  }
+  },
 ): void;
 
 /**
@@ -735,15 +1139,16 @@ declare function mkdirp(
       trace?: (...args: Array<any>) => void;
       info?: (...args: Array<any>) => void;
     };
-  }
+  },
 ): void;
 
 /**
  * Print data to stdout using C-style format specifiers.
  *
- * The same formats as the standard C library printf are supported. Integer
- * format types (e.g. `%d`) truncate the Numbers or BigInts to 32 bits. Use the l
- * modifier (e.g. `%ld`) to truncate to 64 bits.
+ * The same formats as the [standard C library
+ * printf](https://en.cppreference.com/w/c/io/fprintf) are supported. Integer
+ * format types (e.g. `%d`) truncate the Numbers or BigInts to 32 bits. Use the
+ * l modifier (e.g. `%ld`) to truncate to 64 bits.
  */
 declare function printf(format: string, ...args: Array<any>): void;
 
@@ -782,31 +1187,48 @@ declare function readlink(path: string | Path): Path;
  * The path's target file/directory must exist.
  *
  * Provides the same functionality as the unix binary of the same name.
+ *
+ * > If you want to convert a relative path to an absolute path, but the path's
+ * > target might NOT exist, use {@link Path.normalize}.
  */
 declare function realpath(path: string | Path): Path;
 
 /**
- * Blocks the current thread for at least the specified number of milliseconds,
- * or maybe a tiny bit longer.
+ * `sleep` and `sleep.sync` block the current thread for at least the specified
+ * number of milliseconds, but maybe a tiny bit longer.
  *
- * alias for `sleep.sync`.
+ * `sleep.async` returns a Promise which resolves in at least the specified
+ * number of milliseconds, but maybe a tiny bit longer.
+ *
+ * `sleep` and `sleep.sync` block the current thread. `sleep.async` doesn't
+ * block the current thread.
+ *
+ * "Blocking the thread" means no other JavaScript code can run while `sleep` or
+ * `sleep.sync` is running. If this is not the behavior you want, use
+ * `sleep.async` instead.
  */
 declare var sleep: {
   /**
-   * Blocks the current thread for at least the specified number of milliseconds,
-   * or maybe a tiny bit longer.
+   * Blocks the current thread for at least the specified number of
+   * milliseconds, but maybe a tiny bit longer.
    *
    * alias for `sleep.sync`.
    *
    * @param milliseconds - The number of milliseconds to block for.
+   *
+   * No other JavaScript code can run while `sleep()` is running. If this is
+   * not the behavior you want, use `sleep.async` instead.
    */
   (milliseconds: number): void;
 
   /**
-   * Blocks the current thread for at least the specified number of milliseconds,
-   * or maybe a tiny bit longer.
+   * Blocks the current thread for at least the specified number of
+   * milliseconds, but maybe a tiny bit longer.
    *
    * @param milliseconds - The number of milliseconds to block for.
+   *
+   * No other JavaScript code can run while `sleep.sync` is running. If this is
+   * not the behavior you want, use `sleep.async` instead.
    */
   sync(milliseconds: number): void;
 
@@ -815,6 +1237,14 @@ declare var sleep: {
    * milliseconds, maybe a little longer.
    *
    * @param milliseconds - The number of milliseconds to wait before the returned Promise should be resolved.
+   *
+   * `sleep.async` doesn't block the current thread, so other JavaScript code
+   * (registered event handlers, async functions, timers, etc) can run while
+   * `sleep.async`'s return Promise is waiting to resolve. If this is not the
+   * behavior you want, use `sleep.sync` instead.
+   *
+   * The Promise returned by `sleep.async` will never get rejected. It will only
+   * ever get resolved.
    */
   async(milliseconds: number): Promise<void>;
 };
@@ -839,42 +1269,129 @@ declare function touch(path: string | Path): void;
  * @param options.suffixes A list of filename extension suffixes to include in the search, ie [".exe"]. Defaults to `Path.OS_PROGRAM_EXTENSIONS`.
  * @param options.trace A logging function that will be called at various times during the execution of `which`. Defaults to {@link logger.trace}.
  */
-declare function which(
-  binaryName: string,
-  options?: {
-    /**
-     * A list of folders where programs may be found. Defaults to
-     * `env.PATH?.split(Path.OS_ENV_VAR_SEPARATOR) || []`.
-     */
-    searchPaths?: Array<Path | string>;
+declare function which(binaryName: string, options?: WhichOptions): Path | null;
 
-    /**
-     * A list of filename extension suffixes to include in the search, ie
-     * `[".exe"]`. Defaults to {@link Path.OS_PROGRAM_EXTENSIONS}.
-     */
-    suffixes?: Array<string>;
+declare type WhichOptions = {
+  /**
+   * A list of folders where programs may be found. Defaults to
+   * `env.PATH?.split(Path.OS_ENV_VAR_SEPARATOR) || []`.
+   */
+  searchPaths?: Array<Path | string>;
 
-    /** Options which control logging. */
-    logging?: {
-      /**
-       * If provided, this logging function will be called multiple times as
-       * `which` runs, to help you understand what's going on and/or troubleshoot
-       * things. In most cases, it makes sense to use a function from `console`
-       * here, like so:
-       *
-       * ```js
-       * which("bash", {
-       *   logging: { trace: console.log }
-       * });
-       * ```
-       *
-       * Defaults to the current value of {@link logger.trace}. `logger.trace`
-       * defaults to a no-op function.
-       */
-      trace?: (...args: Array<any>) => void;
-    };
-  }
-): Path | null;
+  /**
+   * A list of filename extension suffixes to include in the search, ie
+   * `[".exe"]`. Defaults to {@link Path.OS_PROGRAM_EXTENSIONS}.
+   */
+  suffixes?: Array<string>;
+
+  /** Options which control logging. */
+  logging?: {
+    /**
+     * If provided, this logging function will be called multiple times as
+     * `which` runs, to help you understand what's going on and/or troubleshoot
+     * things. In most cases, it makes sense to use a function from `console`
+     * here, like so:
+     *
+     * ```js
+     * which("bash", {
+     *   logging: { trace: console.log }
+     * });
+     * ```
+     *
+     * Defaults to the current value of {@link logger.trace}. `logger.trace`
+     * defaults to a no-op function.
+     */
+    trace?: (...args: Array<any>) => void;
+  };
+};
+
+/** The type of the return value of {@link whoami}. */
+declare interface WhoAmIResult {
+  name: string;
+  uid: number;
+  gid: number;
+}
+
+/**
+ * Get info about the user the yavascript process is executing as.
+ *
+ * Provides functionality similar to the unix binaries `whoami` and `id`.
+ *
+ * NOTE: Doesn't work on Windows; throws an error.
+ */
+declare function whoami(): WhoAmIResult;
+
+/**
+ * Runs a child process and blocks until it exits. You can call it with either a
+ * string or an array of strings.
+ *
+ * When calling `exec` with an array of strings, the first string in the array
+ * is the program to run, and the rest of the strings in the array are arguments
+ * to the program, eg:
+ *
+ * ```ts
+ * exec(["echo", "hi", "there"]);
+ * exec(["printf", "something with spaces\n"]);
+ * ```
+ *
+ * When calling with a string instead of an array, the string will be split into
+ * separate arguments using the following rules:
+ *
+ * - The program and its arguments will be determined by splitting the input
+ *   string on whitespace, except:
+ *   - Stuff in single or double-quotes will be preserved as a single argument
+ *   - Double and single quotes can be "glued" together (eg `"bla"'bla'` becomes
+ *     `blabla`)
+ *   - The escape sequences `\n`, `\r`, `\t`, `\v`, `\0`, and `\\` can be used
+ *     inside of quotes get replaced with newline, carriage return, tab,
+ *     vertical tab, nul, and `\` characters, respectively
+ *
+ * For example:
+ *
+ * ```ts
+ * exec(`echo hi there`);
+ * exec(`printf "something with spaces\n"`);
+ * ```
+ *
+ * The intent is that it behaves similarly to what you would expect from a UNIX
+ * shell, but only the "safe" features. "Unsafe" features like environment
+ * variable expansion (`$VAR` or `${VAR}`), subshells (\`echo hi\` or `$(echo
+ * hi)`), and redirection (`> /dev/null` or `2>&1 `) are not supported. To use
+ * those features, shell out to `bash` or `sh` directly via eg `exec(['bash',
+ * '-c', 'your command string'])`, but be aware of the security implications of
+ * doing so.
+ *
+ * `exec` also supports a second argument, an options object which supports the
+ * following keys (all are optional):
+ *
+ * | Property                       | Purpose                                             |
+ * | ------------------------------ | --------------------------------------------------- |
+ * | cwd (string)                   | current working directory for the child process     |
+ * | env (object)                   | environment variables for the process               |
+ * | failOnNonZeroStatus (boolean)  | whether to throw error on nonzero exit status       |
+ * | captureOutput (boolean/string) | controls how stdout/stderr is directed              |
+ * | logging (object)               | controls how/whether info messages are logged       |
+ * | block (boolean)                | whether to wait for child process exit now or later |
+ *
+ * The return value of `exec` varies depending on the options passed:
+ *
+ * - When `captureOutput` is true or "utf-8", an object will be returned with
+ *   `stdout` and `stderr` properties, both strings.
+ * - When `captureOutput` is "arraybuffer", an object will be returned with
+ *   `stdout` and `stderr` properties, both `ArrayBuffer`s.
+ * - When `failOnNonZeroStatus` is false, an object will be returned with
+ *   `status` (the exit code; number or undefined) and `signal` (the signal that
+ *   killed the process; number or undefined).
+ * - When `captureOutput` is non-false and `failOnNonZeroStatus` is false, an
+ *   object will be returned with four properties (the two associated with
+ *   `failOnNonZeroStatus`, and the two associated with `captureOutput`).
+ * - When `captureOutput` is false or unspecified, and `failOnNonZeroStatus` is
+ *   true or unspecified, undefined will be returned.
+ * - If `block` is false, an object with a "wait" method is returned instead,
+ *   which blocks the calling thread until the process exits, and then returns
+ *   one of the values described above.
+ */
+declare const exec: Exec;
 
 declare type BaseExecOptions = {
   /** Sets the current working directory for the child process. */
@@ -938,6 +1455,53 @@ declare type BaseExecOptions = {
   block?: boolean;
 };
 
+declare interface Exec {
+  /**
+   * Runs a child process using the provided arguments.
+   *
+   * When `args` is an Array, the first value in the Array is the program to
+   * run.
+   *
+   * @param args - The command to run.
+   * @param options - Options; see {@link BaseExecOptions}
+   */
+  <
+    ExecOptions extends BaseExecOptions = {
+      failOnNonZeroStatus: true;
+      captureOutput: false;
+      block: true;
+    },
+  >(
+    args: Array<string | Path | number> | string | Path,
+    options?: ExecOptions,
+  ): ExecOptions["block"] extends false
+    ? { wait(): ExecWaitResult<ExecOptions> }
+    : ExecWaitResult<ExecOptions>;
+
+  /**
+   * Parse the provided value into an array of command-line argument strings,
+   * using the same logic that {@link exec} and {@link ChildProcess} use.
+   */
+  toArgv(args: Array<string | Path | number> | string | Path): Array<string>;
+}
+
+/**
+ * `$(...)` is an alias for `exec(..., { captureOutput: true, failOnNonZeroStatus: true })`.
+ *
+ * It's often used to capture the output of a program:
+ *
+ * ```ts
+ * const result = $(`echo hi`).stdout;
+ * // result is 'hi\n'
+ * ```
+ *
+ * For more info, see {@link exec}.
+ */
+declare function $(args: Array<string | Path | number> | string | Path): {
+  stdout: string;
+  stderr: string;
+};
+
 type ExecWaitResult<ExecOptions extends BaseExecOptions> = ExecOptions extends
   | { captureOutput: true | "utf8" | "arraybuffer" }
   | { failOnNonZeroStatus: false }
@@ -954,41 +1518,18 @@ type ExecWaitResult<ExecOptions extends BaseExecOptions> = ExecOptions extends
         : {})
   : void;
 
-declare interface Exec {
-  <
-    ExecOptions extends BaseExecOptions = {
-      failOnNonZeroStatus: true;
-      captureOutput: false;
-      block: true;
-    }
-  >(
-    args: Array<string | Path | number> | string | Path,
-    options?: ExecOptions
-  ): ExecOptions["block"] extends false
-    ? { wait(): ExecWaitResult<ExecOptions> }
-    : ExecWaitResult<ExecOptions>;
-
-  /**
-   * Parse the provided value into an array of command-line argument strings,
-   * using the same logic that {@link exec} and {@link ChildProcess} use.
-   */
-  toArgv(args: Array<string | Path | number> | string | Path): Array<string>;
-}
-
 /**
- * Runs a child process using the provided arguments.
+ * A class which represents a child process. The process may or may not be
+ * running.
  *
- * The first value in the arguments array is the program to run.
+ * This class is the API used internally by the {@link exec} function to spawn child
+ * processes.
+ *
+ * Generally, you should not need to use the `ChildProcess` class directly, and
+ * should use {@link exec} or {@link $} instead. However, you may need to use it in some
+ * special cases, like when specifying custom stdio for a process, or spawning a
+ * non-blocking long-running process.
  */
-declare const exec: Exec;
-
-/** Alias for `exec(args, { captureOutput: true })` */
-declare function $(args: Array<string | Path | number> | string | Path): {
-  stdout: string;
-  stderr: string;
-};
-
-/** A class which represents a child process. The process may or may not be running. */
 declare interface ChildProcess {
   /**
    * The argv for the process. The first entry in this array is the program to
@@ -1016,7 +1557,8 @@ declare interface ChildProcess {
     err: FILE;
   };
 
-  pid: number | null;
+  get state(): ChildProcessState;
+  get pid(): number | null;
 
   /** Spawns the process and returns its pid (process id). */
   start(): number;
@@ -1026,6 +1568,33 @@ declare interface ChildProcess {
     | { status: number; signal: undefined }
     | { status: undefined; signal: number };
 }
+
+declare type ChildProcessState =
+  | {
+      id: "UNSTARTED";
+    }
+  | {
+      id: "STARTED";
+      pid: number;
+    }
+  | {
+      id: "STOPPED";
+      pid: number;
+    }
+  | {
+      id: "CONTINUED";
+      pid: number;
+    }
+  | {
+      id: "EXITED";
+      oldPid: number;
+      status: number;
+    }
+  | {
+      id: "SIGNALED";
+      oldPid: number;
+      signal: number;
+    };
 
 /**
  * Options to be passed to the ChildProcess constructor. Their purposes and
@@ -1074,13 +1643,39 @@ declare interface ChildProcessConstructor {
    */
   new (
     args: string | Path | Array<string | number | Path>,
-    options?: ChildProcessOptions
+    options?: ChildProcessOptions,
   ): ChildProcess;
 
   readonly prototype: ChildProcess;
 }
 
 declare var ChildProcess: ChildProcessConstructor;
+
+/**
+ * Searches the filesystem in order to resolve [UNIX-style glob
+ * strings](https://man7.org/linux/man-pages/man7/glob.7.html) into an array of
+ * matching filesystem paths.
+ *
+ * Glob strings assist in succinctly finding and describing a set of files on
+ * disk. For instance, to find the path of every `.js` file in the `src` folder,
+ * one might write `src/*.js`.
+ *
+ * The function `glob` can be used to turn one or more of these "glob strings" into an array of
+ * `Path` objects.
+ *
+ * `glob` uses [minimatch](https://www.npmjs.com/package/minimatch) with its
+ * default options, which means it supports features like brace expanstion,
+ * "globstar" (**) matching, and other features you would expect from a modern
+ * globbing solution.
+ *
+ * > When specifying more than one pattern string, paths must match ALL of the
+ * > patterns to be included in the returned Array. In other words, it uses
+ * > "logical AND" behavior when you give it more than one pattern.
+ */
+declare function glob(
+  patterns: string | Array<string>,
+  options?: GlobOptions,
+): Array<Path>;
 
 /**
  * Options for {@link glob}.
@@ -1130,406 +1725,464 @@ declare type GlobOptions = {
 };
 
 /**
- * Search the filesystem for files matching the specified glob patterns.
+ * Prints special ANSI escape characters to stdout which instruct your terminal
+ * emulator to clear the screen and clear your terminal scrollback.
  *
- * Uses [minimatch](https://www.npmjs.com/package/minimatch) with its default
- * options.
- */
-declare function glob(
-  patterns: string | Array<string>,
-  options?: GlobOptions
-): Array<Path>;
-
-/**
- * Clear the contents and scrollback buffer of the tty by printing special characters into stdout.
+ * Identical to {@link console.clear}.
  */
 declare function clear(): void;
 
 interface Console {
-  /** Same as {@link clear}(). */
-  clear: typeof clear;
+  /**
+   * Logs its arguments to stdout, with a newline appended.
+   *
+   * Any value can be logged, not just strings. Non-string values will be
+   * formatted using {@link inspect}.
+   *
+   * Functionally identical to {@link console.info}, {@link echo}, and
+   * {@link print}. Contrast with {@link console.error}, which prints to stderr
+   * instead of stdout.
+   */
+  log(message?: any, ...optionalParams: any[]): void;
+
+  /**
+   * Logs its arguments to stdout, with a newline appended.
+   *
+   * Any value can be logged, not just strings. Non-string values will be
+   * formatted using {@link inspect}.
+   *
+   * Functionally identical to {@link console.log}, {@link echo}, and
+   * {@link print}. Contrast with {@link console.error}, which prints to stderr
+   * instead of stdout.
+   */
+  info(message?: any, ...optionalParams: any[]): void;
+
+  /**
+   * Logs its arguments to stderr, with a newline appended.
+   *
+   * Any value can be logged, not just strings. Non-string values will be
+   * formatted using {@link inspect}.
+   *
+   * Functionally identical to {@link console.error}. Contrast with
+   * {@link console.log}, which prints to stdout instead of stderr.
+   */
+  warn(message?: any, ...optionalParams: any[]): void;
+
+  /**
+   * Logs its arguments to stderr, with a newline appended.
+   *
+   * Any value can be logged, not just strings. Non-string values will be
+   * formatted using {@link inspect}.
+   *
+   * Functionally identical to {@link console.warn}. Contrast with
+   * {@link console.log}, which prints to stdout instead of stderr.
+   */
+  error(message?: any, ...optionalParams: any[]): void;
+
+  /**
+   * Prints special ANSI escape characters to stdout which instruct your terminal
+   * emulator to clear the screen and clear your terminal scrollback.
+   *
+   * Identical to {@link clear}.
+   */
+  clear(): void;
 }
 
+declare var console: Console;
+
 /**
- * Remove ANSI control characters from a string.
+ * `print` is an alias for {@link console.log}, which prints values to stdout.
+ *
+ * Any value can be logged, not just strings. Non-string values will be
+ * formatted using {@link inspect}.
+ */
+declare function print(...args: any): void;
+
+/**
+ * Removes ANSI control characters from a string.
  */
 declare function stripAnsi(input: string | number | Path): string;
 
 /**
- * Wrap a string in double quotes, and escape any double-quotes inside using `\"`.
+ * Wraps a string in double quotes, and escapes any double-quotes inside using `\"`.
  */
 declare function quote(input: string | number | Path): string;
 
 // Colors
 
-/** Wrap a string with the ANSI control characters that will make it print as black text. */
+/** Wraps a string with the ANSI control characters that will make it print as black text. */
 declare function black(input: string | number | Path): string;
-/** Wrap a string with the ANSI control characters that will make it print as red text. */
+/** Wraps a string with the ANSI control characters that will make it print as red text. */
 declare function red(input: string | number | Path): string;
-/** Wrap a string with the ANSI control characters that will make it print as green text. */
+/** Wraps a string with the ANSI control characters that will make it print as green text. */
 declare function green(input: string | number | Path): string;
-/** Wrap a string with the ANSI control characters that will make it print as yellow text. */
+/** Wraps a string with the ANSI control characters that will make it print as yellow text. */
 declare function yellow(input: string | number | Path): string;
-/** Wrap a string with the ANSI control characters that will make it print as blue text. */
+/** Wraps a string with the ANSI control characters that will make it print as blue text. */
 declare function blue(input: string | number | Path): string;
-/** Wrap a string with the ANSI control characters that will make it print as magenta text. */
+/** Wraps a string with the ANSI control characters that will make it print as magenta text. */
 declare function magenta(input: string | number | Path): string;
-/** Wrap a string with the ANSI control characters that will make it print as cyan text. */
+/** Wraps a string with the ANSI control characters that will make it print as cyan text. */
 declare function cyan(input: string | number | Path): string;
-/** Wrap a string with the ANSI control characters that will make it print as white text. */
+/** Wraps a string with the ANSI control characters that will make it print as white text. */
 declare function white(input: string | number | Path): string;
-/** Wrap a string with the ANSI control characters that will make it print as gray text. */
+/** Wraps a string with the ANSI control characters that will make it print as gray text. (Alias for {@link grey}.) */
 declare function gray(input: string | number | Path): string;
-/** Wrap a string with the ANSI control characters that will make it print as grey text. */
+/** Wraps a string with the ANSI control characters that will make it print as grey text. (Alias for {@link gray}.) */
 declare function grey(input: string | number | Path): string;
 
 // Background Colors
 
-/** Wrap a string with the ANSI control characters that will make it have a black background. */
+/** Wraps a string with the ANSI control characters that will make it have a black background when printed. */
 declare function bgBlack(input: string | number | Path): string;
-/** Wrap a string with the ANSI control characters that will make it have a red background. */
+/** Wraps a string with the ANSI control characters that will make it have a red background when printed. */
 declare function bgRed(input: string | number | Path): string;
-/** Wrap a string with the ANSI control characters that will make it have a green background. */
+/** Wraps a string with the ANSI control characters that will make it have a green background when printed. */
 declare function bgGreen(input: string | number | Path): string;
-/** Wrap a string with the ANSI control characters that will make it have a yellow background. */
+/** Wraps a string with the ANSI control characters that will make it have a yellow background when printed. */
 declare function bgYellow(input: string | number | Path): string;
-/** Wrap a string with the ANSI control characters that will make it have a blue background. */
+/** Wraps a string with the ANSI control characters that will make it have a blue background when printed. */
 declare function bgBlue(input: string | number | Path): string;
-/** Wrap a string with the ANSI control characters that will make it have a magenta background. */
+/** Wraps a string with the ANSI control characters that will make it have a magenta background when printed. */
 declare function bgMagenta(input: string | number | Path): string;
-/** Wrap a string with the ANSI control characters that will make it have a cyan background. */
+/** Wraps a string with the ANSI control characters that will make it have a cyan background when printed. */
 declare function bgCyan(input: string | number | Path): string;
-/** Wrap a string with the ANSI control characters that will make it have a white background. */
+/** Wraps a string with the ANSI control characters that will make it have a white background when printed. */
 declare function bgWhite(input: string | number | Path): string;
 
 // Modifiers
 
-/** Wrap a string with the ANSI control character that resets all styling. */
+/** Prefixes a string with the ANSI control character that resets all styling. */
 declare function reset(input: string | number | Path): string;
-/** Wrap a string with the ANSI control characters that will make it print with a bold style. */
+/** Wraps a string with the ANSI control characters that will make it print with a bold style. */
 declare function bold(input: string | number | Path): string;
-/** Wrap a string with the ANSI control characters that will make it print with a dimmed style. */
+/** Wraps a string with the ANSI control characters that will make it print with a dimmed style. */
 declare function dim(input: string | number | Path): string;
-/** Wrap a string with the ANSI control characters that will make it print italicized. */
+/** Wraps a string with the ANSI control characters that will make it print italicized. */
 declare function italic(input: string | number | Path): string;
-/** Wrap a string with the ANSI control characters that will make it print underlined. */
+/** Wraps a string with the ANSI control characters that will make it print underlined. */
 declare function underline(input: string | number | Path): string;
-/** Wrap a string with ANSI control characters such that its foreground (text) and background colors are swapped. */
+/** Wraps a string with ANSI control characters that will make it print with its foreground (text) and background colors swapped. */
 declare function inverse(input: string | number | Path): string;
-/** Wrap a string with ANSI control characters such that it is hidden. */
+/** Wraps a string with ANSI control characters that will make it print as hidden. */
 declare function hidden(input: string | number | Path): string;
-/** Wrap a string with the ANSI control characters that will make it print with a horizontal line through its center. */
+/** Wraps a string with the ANSI control characters that will make it print with a horizontal line through its center. */
 declare function strikethrough(input: string | number | Path): string;
 
-/** Split `str` on newline and then return lines matching `pattern`. */
+/**
+ * Splits the string passed into it on `\n` and then returns the lines matching
+ * the specified pattern, as an array of strings or detail objects.
+ *
+ * @param str - The string to search through.
+ * @param pattern - The pattern to find. Can be a string or a RegExp.
+ * @param options - Options which control matching behavior.
+ *
+ * See also {@link grepFile} and {@link String.prototype.grep}.
+ */
 declare const grepString: {
-  /** Split `str` on newline and then return lines matching `pattern`. */
-  (str: string, pattern: string | RegExp): Array<string>;
-
-  /** Split `str` on newline and then return lines matching `pattern`. */
   (
     str: string,
     pattern: string | RegExp,
-    options: { inverse: false }
-  ): Array<string>;
+    options: GrepOptions & { details: true },
+  ): Array<GrepMatchDetail>;
 
-  /** Split `str` on newline and then return lines NOT matching `pattern`. */
-  (
-    str: string,
-    pattern: string | RegExp,
-    options: { inverse: true }
-  ): Array<string>;
-
-  /** Split `str` on newline and then return lines matching `pattern`. */
-  (
-    str: string,
-    pattern: string | RegExp,
-    options: { details: false }
-  ): Array<string>;
-
-  /** Split `str` on newline and then return lines matching `pattern`. */
-  (
-    str: string,
-    pattern: string | RegExp,
-    options: { inverse: false; details: false }
-  ): Array<string>;
-
-  /** Split `str` on newline and then return lines NOT matching `pattern`. */
-  (
-    str: string,
-    pattern: string | RegExp,
-    options: { inverse: true; details: false }
-  ): Array<string>;
-
-  /** Split `str` on newline and then return info about lines matching `pattern`. */
-  (str: string, pattern: string | RegExp, options: { details: true }): Array<{
-    lineNumber: number;
-    lineContent: string;
-    matches: RegExpMatchArray;
-  }>;
-
-  /** Split `str` on newline and then return info about lines matching `pattern`. */
-  (
-    str: string,
-    pattern: string | RegExp,
-    options: { inverse: false; details: true }
-  ): Array<string>;
-
-  /** Split `str` on newline and then return info about lines NOT matching `pattern`. */
-  (
-    str: string,
-    pattern: string | RegExp,
-    options: { inverse: true; details: true }
-  ): Array<{
-    lineNumber: number;
-    lineContent: string;
-    matches: RegExpMatchArray;
-  }>;
+  (str: string, pattern: string | RegExp, options?: GrepOptions): Array<string>;
 };
 
-/** Read the content at `path`, split it on newline, and then return lines matching `pattern`. */
+/**
+ * Reads the file content at `path`, splits it on `\n`, and then returns the
+ * lines matching the specified pattern, as an array of strings or detail objects.
+ *
+ * @param str - The string to search through.
+ * @param pattern - The pattern to find. Can be a string or a RegExp.
+ * @param options - Options which control matching behavior.
+ *
+ * See also {@link grepString} and {@link String.prototype.grep}.
+ */
 declare const grepFile: {
-  /** Read the content at `path`, split it on newline,  and then return lines matching `pattern`. */
-  (path: string | Path, pattern: string | RegExp): Array<string>;
-
-  /** Read the content at `path`, split it on newline,  and then return lines matching `pattern`. */
   (
     path: string | Path,
     pattern: string | RegExp,
-    options: { inverse: false }
+    options: GrepOptions & { details: true },
+  ): Array<GrepMatchDetail>;
+
+  (
+    path: string | Path,
+    pattern: string | RegExp,
+    options?: GrepOptions,
   ): Array<string>;
-
-  /** Read the content at `path`, split it on newline,  and then return lines NOT matching `pattern`. */
-  (
-    path: string | Path,
-    pattern: string | RegExp,
-    options: { inverse: true }
-  ): Array<string>;
-
-  /** Read the content at `path`, split it on newline,  and then return lines matching `pattern`. */
-  (
-    path: string | Path,
-    pattern: string | RegExp,
-    options: { details: false }
-  ): Array<string>;
-
-  /** Read the content at `path`, split it on newline,  and then return lines matching `pattern`. */
-  (
-    path: string | Path,
-    pattern: string | RegExp,
-    options: { inverse: false; details: false }
-  ): Array<string>;
-
-  /** Read the content at `path`, split it on newline,  and then return lines NOT matching `pattern`. */
-  (
-    path: string | Path,
-    pattern: string | RegExp,
-    options: { inverse: true; details: false }
-  ): Array<string>;
-
-  /** Read the content at `path`, split it on newline,  and then return info about lines matching `pattern`. */
-  (
-    path: string | Path,
-    pattern: string | RegExp,
-    options: { details: true }
-  ): Array<{
-    lineNumber: number;
-    lineContent: string;
-    matches: RegExpMatchArray;
-  }>;
-
-  /** Read the content at `path`, split it on newline,  and then return info about lines matching `pattern`. */
-  (
-    path: string | Path,
-    pattern: string | RegExp,
-    options: { inverse: false; details: true }
-  ): Array<string>;
-
-  /** Read the content at `path`, split it on newline,  and then return info about lines NOT matching `pattern`. */
-  (
-    path: string | Path,
-    pattern: string | RegExp,
-    options: { inverse: true; details: true }
-  ): Array<{
-    lineNumber: number;
-    lineContent: string;
-    matches: RegExpMatchArray;
-  }>;
 };
 
 interface String {
   // Same as grepString but without the first argument.
+  /**
+   * Splits the target string on `\n` and then returns the lines matching the
+   * specified pattern, as an array of strings or detail objects.
+   *
+   * @param str - The string to search through.
+   * @param pattern - The pattern to find. Can be a string or a RegExp.
+   * @param options - Options which control matching behavior.
+   *
+   * See also {@link grepString} and {@link grepFile}.
+   */
   grep: {
-    /** Split the string on newline and then return lines matching `pattern`. */
-    (pattern: string | RegExp): Array<string>;
-
-    /** Split the string on newline and then return lines matching `pattern`. */
-    (pattern: string | RegExp, options: { inverse: false }): Array<string>;
-
-    /** Split the string on newline and then return lines NOT matching `pattern`. */
-    (pattern: string | RegExp, options: { inverse: true }): Array<string>;
-
-    /** Split the string on newline and then return lines matching `pattern`. */
-    (pattern: string | RegExp, options: { details: false }): Array<string>;
-
-    /** Split the string on newline and then return lines matching `pattern`. */
     (
       pattern: string | RegExp,
-      options: { inverse: false; details: false }
-    ): Array<string>;
+      options: GrepOptions & { details: true },
+    ): Array<GrepMatchDetail>;
 
-    /** Split the string on newline and then return lines NOT matching `pattern`. */
-    (
-      pattern: string | RegExp,
-      options: { inverse: true; details: false }
-    ): Array<string>;
-
-    /** Split the string on newline and then return info about lines matching `pattern`. */
-    (pattern: string | RegExp, options: { details: true }): Array<{
-      lineNumber: number;
-      lineContent: string;
-      matches: RegExpMatchArray;
-    }>;
-
-    /** Split the string on newline and then return info about lines matching `pattern`. */
-    (
-      pattern: string | RegExp,
-      options: { inverse: false; details: true }
-    ): Array<string>;
-
-    /** Split the string on newline and then return info about lines NOT matching `pattern`. */
-    (
-      pattern: string | RegExp,
-      options: { inverse: true; details: true }
-    ): Array<{
-      lineNumber: number;
-      lineContent: string;
-      matches: RegExpMatchArray;
-    }>;
+    (pattern: string | RegExp, options?: GrepOptions): Array<string>;
   };
 }
 
-declare type TypeValidator<T> = (value: any) => value is T;
+declare interface GrepOptions {
+  /**
+   * When `inverse` is true, the grep function returns those lines which DON'T
+   * match the pattern, instead of those which do. Defaults to `false`.
+   */
+  inverse?: boolean;
 
-declare type CoerceToTypeValidator<V extends CoerceableToTypeValidator> =
-  V extends StringConstructor
-    ? TypeValidator<string>
-    : V extends NumberConstructor
-    ? TypeValidator<number>
-    : V extends BooleanConstructor
-    ? TypeValidator<boolean>
-    : V extends BigIntConstructor
-    ? TypeValidator<BigInt>
-    : V extends SymbolConstructor
-    ? TypeValidator<Symbol>
-    : V extends RegExpConstructor
-    ? TypeValidator<RegExp>
-    : V extends ArrayConstructor
-    ? TypeValidator<Array<unknown>>
-    : V extends SetConstructor
-    ? TypeValidator<Set<unknown>>
-    : V extends MapConstructor
-    ? TypeValidator<Map<unknown, unknown>>
-    : V extends ObjectConstructor
-    ? TypeValidator<{
-        [key: string | number | symbol]: unknown;
-      }>
-    : V extends DateConstructor
-    ? TypeValidator<Date>
-    : V extends FunctionConstructor
-    ? TypeValidator<Function>
-    : V extends ArrayBufferConstructor
-    ? TypeValidator<ArrayBuffer>
-    : V extends SharedArrayBufferConstructor
-    ? TypeValidator<SharedArrayBuffer>
-    : V extends DataViewConstructor
-    ? TypeValidator<DataView>
-    : V extends Int8ArrayConstructor
-    ? TypeValidator<Int8Array>
-    : V extends Uint8ArrayConstructor
-    ? TypeValidator<Uint8Array>
-    : V extends Uint8ClampedArrayConstructor
-    ? TypeValidator<Uint8ClampedArray>
-    : V extends Int16ArrayConstructor
-    ? TypeValidator<Int16Array>
-    : V extends Uint16ArrayConstructor
-    ? TypeValidator<Uint16Array>
-    : V extends Int32ArrayConstructor
-    ? TypeValidator<Int32Array>
-    : V extends Uint32ArrayConstructor
-    ? TypeValidator<Uint32Array>
-    : V extends Float32ArrayConstructor
-    ? TypeValidator<Float32Array>
-    : V extends Float64ArrayConstructor
-    ? TypeValidator<Float64Array>
-    : V extends RegExp
-    ? TypeValidator<string>
-    : V extends {}
-    ? TypeValidator<{
-        [key in keyof V]: CoerceToTypeValidator<V[key]>;
-      }>
-    : V extends []
-    ? TypeValidator<[]>
-    : V extends [any]
-    ? TypeValidator<Array<CoerceToTypeValidator<V[0]>>>
-    : V extends Array<any>
-    ? TypeValidator<Array<unknown>>
-    : V extends {
-        new (...args: any): any;
-      }
-    ? TypeValidator<InstanceType<V>>
-    : TypeValidator<V>;
+  /**
+   * When `details` is true, the grep function returns an array of
+   * {@link GrepMatchDetail} objects instead of an array of strings. Defaults to
+   * `false`.
+   */
+  details?: boolean;
+}
 
-declare type CoerceableToTypeValidator =
-  | boolean
-  | number
-  | string
-  | bigint
-  | undefined
-  | null
-  | RegExp
-  | StringConstructor
-  | NumberConstructor
-  | BooleanConstructor
-  | BigIntConstructor
-  | SymbolConstructor
-  | RegExpConstructor
-  | ArrayConstructor
-  | SetConstructor
-  | MapConstructor
-  | ObjectConstructor
-  | DateConstructor
-  | FunctionConstructor
-  | ArrayBufferConstructor
-  | SharedArrayBufferConstructor
-  | DataViewConstructor
-  | Int8ArrayConstructor
-  | Uint8ArrayConstructor
-  | Uint8ClampedArrayConstructor
-  | Int16ArrayConstructor
-  | Uint16ArrayConstructor
-  | Int32ArrayConstructor
-  | Uint32ArrayConstructor
-  | Float32ArrayConstructor
-  | Float64ArrayConstructor
-  | {}
-  | []
-  | [any]
-  | Array<any>
-  | {
-      new (...args: any): any;
-    };
+/**
+ * When `grepString`, `grepFile`, or `String.prototype.grep` are called with the
+ * `{ details: true }` option set, an Array of `GrepMatchDetail` objects is
+ * returned.
+ */
+declare interface GrepMatchDetail {
+  lineNumber: number;
+  lineContent: string;
+  matches: RegExpMatchArray;
+}
 
-declare type UnwrapTypeFromCoerceableOrValidator<
-  V extends CoerceableToTypeValidator | TypeValidator<any> | unknown
-> = V extends TypeValidator<infer T>
-  ? T
-  : V extends CoerceableToTypeValidator
-  ? CoerceToTypeValidator<V> extends TypeValidator<infer T>
-    ? T
-    : never
-  : unknown;
-
+/**
+ * The `types` namespace object contains various functions which can be used to
+ * identify the type of a value at runtime. It is based on
+ * [pheno](https://github.com/suchipi/pheno), with some yavascript-specific
+ * extensions.
+ *
+ * ## Usage
+ *
+ * To check that a value is of a type, use `is`. To assert that a value is of a
+ * type, use `assert.type`:
+ *
+ * ```ts
+ * is("hi", types.string); // true
+ * is("hi", types.number); // false
+ * is({ blah: 42 }, types.objectWithProperties({ blah: types.number })); // true
+ *
+ * assert.type("hi", types.string);
+ * assert.type("hi", types.number); // throws
+ * assert.type({ blah: 42 }, types.objectWithProperties({ blah: types.number }));
+ * ```
+ *
+ * In many cases, you can use a "normal" JavaScript value for the type instead
+ * of something from the `types` namespace. For instance, the following code
+ * block is equivalent to the previous one:
+ *
+ * ```ts
+ * is("hi", String); // true
+ * is("hi", Number); // false
+ * is({ blah: 42 }, { blah: Number }); // true
+ *
+ * assert.type("hi", String);
+ * assert.type("hi", Number); // throws
+ * assert.type({ blah: 42 }, { blah: Number });
+ * ```
+ *
+ * For more info about using "normal" values, see the "Coercion" heading below.
+ *
+ * ## Explanation
+ *
+ * There are two kinds of function properties found on the `types` namespace:
+ * those which return a boolean, and those which return a function. Functions
+ * which return a boolean are called "type validators", and can be used to check
+ * the type of a value. For example, `types.number` is a type validator:
+ *
+ * ```ts
+ * is(42, types.number); // returns true
+ * ```
+ *
+ * The other kind of function is a function which returns a function. These are
+ * called "type validator constructors", because the function they return is a
+ * type validator. They are used to construct complex type validators. For
+ * example, `types.exactString` is a type validator constructor:
+ *
+ * ```ts
+ * const myType = types.exactString("potato");
+ * // myType is a function which returns true or false
+ *
+ * is("eggplant", myType); // returns false
+ * is("potato", myType); // returns true
+ * ```
+ *
+ * ## List of Functions
+ *
+ * ### Type Validators
+ *
+ * Here is a list of all the type validators:
+ *
+ * - `any`
+ * - `anyArray`
+ * - `anyFunction`
+ * - `anyMap`
+ * - `anyObject`
+ * - `anySet`
+ * - `anyTypeValidator`
+ * - `array` (alias of `arrayOfUnknown`)
+ * - `arrayOfAny`
+ * - `arrayOfUnknown`
+ * - `Array` (alias of `arrayOfUnknown`)
+ * - `bigint`
+ * - `BigInt` (alias of `bigint`)
+ * - `boolean`
+ * - `Boolean` (alias of `boolean`)
+ * - `Date`
+ * - `Error`
+ * - `false`
+ * - `falsy`
+ * - `Function` (alias of `unknownFunction`)
+ * - `Infinity`
+ * - `integer`
+ * - `map` (alias of `unknownMap`)
+ * - `Map` (alias of `unknownMap`)
+ * - `NaN`
+ * - `NegativeInfinity`
+ * - `never`
+ * - `nonNullOrUndefined`
+ * - `null`
+ * - `nullish`
+ * - `void` (alias of `nullish`)
+ * - `number` (doesn't include NaN, Infinity, or -Infinity)
+ * - `Number` (alias of `number`)
+ * - `numberIncludingNanAndInfinities`
+ * - `object` (alias of `unknownObject`)
+ * - `Object` (alias of `unknownObject`)
+ * - `objectOrNull`
+ * - `RegExp`
+ * - `set` (alias of `unknownSet`)
+ * - `Set` (alias of `unknownSet`)
+ * - `string`
+ * - `String` (alias of `string`)
+ * - `Symbol`
+ * - `symbol` (alias of `Symbol`)
+ * - `true`
+ * - `truthy`
+ * - `undefined`
+ * - `unknown`
+ * - `unknownFunction`
+ * - `unknownMap`
+ * - `unknownObject`
+ * - `unknownSet`
+ * - `unknownTypeValidator`
+ * - `ArrayBuffer`
+ * - `SharedArrayBuffer`
+ * - `DataView`
+ * - `TypedArray`
+ * - `Int8Array`
+ * - `Uint8Array`
+ * - `Uint8ClampedArray`
+ * - `Int16Array`
+ * - `Uint16Array`
+ * - `Int32Array`
+ * - `Uint32Array`
+ * - `Float32Array`
+ * - `Float64Array`
+ * - `FILE`
+ * - `Path`
+ * - `JSX.Element` (alias of `JSX.unknownElement`)
+ * - `JSX.unknownElement`
+ * - `JSX.anyElement`
+ * - `JSX.Fragment`
+ *
+ * ### Type Validator Constructors
+ *
+ * And all the type validator constructors:
+ *
+ * - `and`
+ * - `arrayOf`
+ * - `exactBigInt`
+ * - `exactNumber`
+ * - `exactString`
+ * - `exactSymbol`
+ * - `hasClassName`
+ * - `hasToStringTag`
+ * - `instanceOf`
+ * - `intersection`
+ * - `mapOf`
+ * - `mappingObjectOf`
+ * - `maybe`
+ * - `objectWithOnlyTheseProperties`
+ * - `objectWithProperties`
+ * - `or`
+ * - `optional`
+ * - `partialObjectWithProperties`
+ * - `record`
+ * - `setOf`
+ * - `stringMatching`
+ * - `symbolFor`
+ * - `union`
+ *
+ * ## Coercion
+ *
+ * There is also a function, `types.coerce`, which returns an appropriate type
+ * validator value for a given input value, using the following logic:
+ *
+ * | Input value                   | Output validator                   |
+ * | ----------------------------- | ---------------------------------- |
+ * | `String` or `string` global   | `types.string`                     |
+ * | `Number` or `number` global   | `types.number`                     |
+ * | `Boolean` or `boolean` global | `types.boolean`                    |
+ * | `BigInt` or `bigint` global   | `types.bigint`                     |
+ * | `Symbol` global               | `types.Symbol`                     |
+ * | `RegExp` global               | `types.RegExp`                     |
+ * | `Array` global                | `types.arrayOfUnknown`             |
+ * | `Set` global                  | `types.unknownSet`                 |
+ * | `Map` global                  | `types.unknownMap`                 |
+ * | `Object` global               | `types.unknownObject`              |
+ * | `Date` global                 | `types.Date`                       |
+ * | `Function` global             | `types.unknownFunction`            |
+ * | `ArrayBuffer` global          | `types.ArrayBuffer`                |
+ * | `SharedArrayBuffer` global    | `types.SharedArrayBuffer`          |
+ * | `DataView` global             | `types.DataView`                   |
+ * | `Int8Array` global            | `types.Int8Array`                  |
+ * | `Uint8Array` global           | `types.Uint8Array`                 |
+ * | `Uint8ClampedArray` global    | `types.Uint8ClampedArray`          |
+ * | `Int16Array` global           | `types.Int16Array`                 |
+ * | `Uint16Array` global          | `types.Uint16Array`                |
+ * | `Int32Array` global           | `types.Int32Array`                 |
+ * | `Uint32Array` global          | `types.Uint32Array`                |
+ * | `Float32Array` global         | `types.Float32Array`               |
+ * | `Float64Array` global         | `types.Float64Array`               |
+ * | `Path` global                 | `types.Path`                       |
+ * | Any RegExp value              | Validator for matching strings     |
+ * | Empty array                   | Validator for empty arrays         |
+ * | Array with one item           | Validator for array of that item   |
+ * | Array with multiple items     | Validator for tuple of those types |
+ * | Class constructor function    | Validator for instances of it      |
+ * | Any Object value              | Validator for same-shaped object   |
+ * | null                          | `types.null`                       |
+ * | undefined                     | `types.undefined`                  |
+ * | true                          | `types.true`                       |
+ * | false                         | `types.false`                      |
+ * | NaN                           | `types.NaN`                        |
+ * | Infinity                      | `types.Infinity`                   |
+ * | `-Infinity`                   | `types.NegativeInfinity`           |
+ * | Any string value              | `types.exactString(<the value>)`   |
+ * | Any 'normal' number value     | `types.exactNumber(<the value>)`   |
+ * | Any Symbol value              | `types.exactSymbol(<the value>)`   |
+ * | Any BigInt value              | `types.exactBigInt(<the value>)`   |
+ *
+ * > All type constructors, as well as `is` and `assert.type`, do coercion
+ * > automatically! This means that in many cases, you do not need to access
+ * > properties from the `types` namespace.
+ */
 declare const types: {
   // basic types
   any: TypeValidator<any>;
@@ -1614,24 +2267,24 @@ declare const types: {
   exactBigInt<T extends bigint>(num: T): TypeValidator<T>;
   exactSymbol<T extends symbol>(sym: T): TypeValidator<T>;
   hasClassName<Name extends string>(
-    name: Name
+    name: Name,
   ): TypeValidator<{ constructor: Function & { name: Name } }>;
   hasToStringTag(name: string): TypeValidator<any>;
   instanceOf<Klass extends Function & { prototype: any }>(
-    klass: Klass
+    klass: Klass,
   ): TypeValidator<Klass["prototype"]>;
   stringMatching(regexp: RegExp): TypeValidator<string>;
   symbolFor(key: string): TypeValidator<symbol>;
   arrayOf<T extends TypeValidator<any> | CoerceableToTypeValidator | unknown>(
-    typeValidator: T
+    typeValidator: T,
   ): TypeValidator<Array<UnwrapTypeFromCoerceableOrValidator<T>>>;
   intersection: {
     <
       First extends TypeValidator<any> | CoerceableToTypeValidator | unknown,
-      Second extends TypeValidator<any> | CoerceableToTypeValidator | unknown
+      Second extends TypeValidator<any> | CoerceableToTypeValidator | unknown,
     >(
       first: First,
-      second: Second
+      second: Second,
     ): TypeValidator<
       UnwrapTypeFromCoerceableOrValidator<First> &
         UnwrapTypeFromCoerceableOrValidator<Second>
@@ -1639,11 +2292,11 @@ declare const types: {
     <
       First extends TypeValidator<any> | CoerceableToTypeValidator | unknown,
       Second extends TypeValidator<any> | CoerceableToTypeValidator | unknown,
-      Third extends TypeValidator<any> | CoerceableToTypeValidator | unknown
+      Third extends TypeValidator<any> | CoerceableToTypeValidator | unknown,
     >(
       first: First,
       second: Second,
-      third: Third
+      third: Third,
     ): TypeValidator<
       UnwrapTypeFromCoerceableOrValidator<First> &
         UnwrapTypeFromCoerceableOrValidator<Second> &
@@ -1653,12 +2306,12 @@ declare const types: {
       First extends TypeValidator<any> | CoerceableToTypeValidator | unknown,
       Second extends TypeValidator<any> | CoerceableToTypeValidator | unknown,
       Third extends TypeValidator<any> | CoerceableToTypeValidator | unknown,
-      Fourth extends TypeValidator<any> | CoerceableToTypeValidator | unknown
+      Fourth extends TypeValidator<any> | CoerceableToTypeValidator | unknown,
     >(
       first: First,
       second: Second,
       third: Third,
-      fourth: Fourth
+      fourth: Fourth,
     ): TypeValidator<
       UnwrapTypeFromCoerceableOrValidator<First> &
         UnwrapTypeFromCoerceableOrValidator<Second> &
@@ -1670,13 +2323,13 @@ declare const types: {
       Second extends TypeValidator<any> | CoerceableToTypeValidator | unknown,
       Third extends TypeValidator<any> | CoerceableToTypeValidator | unknown,
       Fourth extends TypeValidator<any> | CoerceableToTypeValidator | unknown,
-      Fifth extends TypeValidator<any> | CoerceableToTypeValidator | unknown
+      Fifth extends TypeValidator<any> | CoerceableToTypeValidator | unknown,
     >(
       first: First,
       second: Second,
       third: Third,
       fourth: Fourth,
-      fifth: Fifth
+      fifth: Fifth,
     ): TypeValidator<
       UnwrapTypeFromCoerceableOrValidator<First> &
         UnwrapTypeFromCoerceableOrValidator<Second> &
@@ -1690,14 +2343,14 @@ declare const types: {
       Third extends TypeValidator<any> | CoerceableToTypeValidator | unknown,
       Fourth extends TypeValidator<any> | CoerceableToTypeValidator | unknown,
       Fifth extends TypeValidator<any> | CoerceableToTypeValidator | unknown,
-      Sixth extends TypeValidator<any> | CoerceableToTypeValidator | unknown
+      Sixth extends TypeValidator<any> | CoerceableToTypeValidator | unknown,
     >(
       first: First,
       second: Second,
       third: Third,
       fourth: Fourth,
       fifth: Fifth,
-      sixth: Sixth
+      sixth: Sixth,
     ): TypeValidator<
       UnwrapTypeFromCoerceableOrValidator<First> &
         UnwrapTypeFromCoerceableOrValidator<Second> &
@@ -1713,7 +2366,7 @@ declare const types: {
       Fourth extends TypeValidator<any> | CoerceableToTypeValidator | unknown,
       Fifth extends TypeValidator<any> | CoerceableToTypeValidator | unknown,
       Sixth extends TypeValidator<any> | CoerceableToTypeValidator | unknown,
-      Seventh extends TypeValidator<any> | CoerceableToTypeValidator | unknown
+      Seventh extends TypeValidator<any> | CoerceableToTypeValidator | unknown,
     >(
       first: First,
       second: Second,
@@ -1721,7 +2374,7 @@ declare const types: {
       fourth: Fourth,
       fifth: Fifth,
       sixth: Sixth,
-      seventh: Seventh
+      seventh: Seventh,
     ): TypeValidator<
       UnwrapTypeFromCoerceableOrValidator<First> &
         UnwrapTypeFromCoerceableOrValidator<Second> &
@@ -1739,7 +2392,7 @@ declare const types: {
       Fifth extends TypeValidator<any> | CoerceableToTypeValidator | unknown,
       Sixth extends TypeValidator<any> | CoerceableToTypeValidator | unknown,
       Seventh extends TypeValidator<any> | CoerceableToTypeValidator | unknown,
-      Eighth extends TypeValidator<any> | CoerceableToTypeValidator | unknown
+      Eighth extends TypeValidator<any> | CoerceableToTypeValidator | unknown,
     >(
       first: First,
       second: Second,
@@ -1748,7 +2401,7 @@ declare const types: {
       fifth: Fifth,
       sixth: Sixth,
       seventh: Seventh,
-      eighth: Eighth
+      eighth: Eighth,
     ): TypeValidator<
       UnwrapTypeFromCoerceableOrValidator<First> &
         UnwrapTypeFromCoerceableOrValidator<Second> &
@@ -1768,7 +2421,7 @@ declare const types: {
       Sixth extends TypeValidator<any> | CoerceableToTypeValidator | unknown,
       Seventh extends TypeValidator<any> | CoerceableToTypeValidator | unknown,
       Eighth extends TypeValidator<any> | CoerceableToTypeValidator | unknown,
-      Ninth extends TypeValidator<any> | CoerceableToTypeValidator | unknown
+      Ninth extends TypeValidator<any> | CoerceableToTypeValidator | unknown,
     >(
       first: First,
       second: Second,
@@ -1778,7 +2431,7 @@ declare const types: {
       sixth: Sixth,
       seventh: Seventh,
       eighth: Eighth,
-      ninth: Ninth
+      ninth: Ninth,
     ): TypeValidator<
       UnwrapTypeFromCoerceableOrValidator<First> &
         UnwrapTypeFromCoerceableOrValidator<Second> &
@@ -1800,7 +2453,7 @@ declare const types: {
       Seventh extends TypeValidator<any> | CoerceableToTypeValidator | unknown,
       Eighth extends TypeValidator<any> | CoerceableToTypeValidator | unknown,
       Ninth extends TypeValidator<any> | CoerceableToTypeValidator | unknown,
-      Tenth extends TypeValidator<any> | CoerceableToTypeValidator | unknown
+      Tenth extends TypeValidator<any> | CoerceableToTypeValidator | unknown,
     >(
       first: First,
       second: Second,
@@ -1811,7 +2464,7 @@ declare const types: {
       seventh: Seventh,
       eighth: Eighth,
       ninth: Ninth,
-      tenth: Tenth
+      tenth: Tenth,
     ): TypeValidator<
       UnwrapTypeFromCoerceableOrValidator<First> &
         UnwrapTypeFromCoerceableOrValidator<Second> &
@@ -1828,10 +2481,10 @@ declare const types: {
   and: {
     <
       First extends TypeValidator<any> | CoerceableToTypeValidator | unknown,
-      Second extends TypeValidator<any> | CoerceableToTypeValidator | unknown
+      Second extends TypeValidator<any> | CoerceableToTypeValidator | unknown,
     >(
       first: First,
-      second: Second
+      second: Second,
     ): TypeValidator<
       UnwrapTypeFromCoerceableOrValidator<First> &
         UnwrapTypeFromCoerceableOrValidator<Second>
@@ -1839,11 +2492,11 @@ declare const types: {
     <
       First extends TypeValidator<any> | CoerceableToTypeValidator | unknown,
       Second extends TypeValidator<any> | CoerceableToTypeValidator | unknown,
-      Third extends TypeValidator<any> | CoerceableToTypeValidator | unknown
+      Third extends TypeValidator<any> | CoerceableToTypeValidator | unknown,
     >(
       first: First,
       second: Second,
-      third: Third
+      third: Third,
     ): TypeValidator<
       UnwrapTypeFromCoerceableOrValidator<First> &
         UnwrapTypeFromCoerceableOrValidator<Second> &
@@ -1853,12 +2506,12 @@ declare const types: {
       First extends TypeValidator<any> | CoerceableToTypeValidator | unknown,
       Second extends TypeValidator<any> | CoerceableToTypeValidator | unknown,
       Third extends TypeValidator<any> | CoerceableToTypeValidator | unknown,
-      Fourth extends TypeValidator<any> | CoerceableToTypeValidator | unknown
+      Fourth extends TypeValidator<any> | CoerceableToTypeValidator | unknown,
     >(
       first: First,
       second: Second,
       third: Third,
-      fourth: Fourth
+      fourth: Fourth,
     ): TypeValidator<
       UnwrapTypeFromCoerceableOrValidator<First> &
         UnwrapTypeFromCoerceableOrValidator<Second> &
@@ -1870,13 +2523,13 @@ declare const types: {
       Second extends TypeValidator<any> | CoerceableToTypeValidator | unknown,
       Third extends TypeValidator<any> | CoerceableToTypeValidator | unknown,
       Fourth extends TypeValidator<any> | CoerceableToTypeValidator | unknown,
-      Fifth extends TypeValidator<any> | CoerceableToTypeValidator | unknown
+      Fifth extends TypeValidator<any> | CoerceableToTypeValidator | unknown,
     >(
       first: First,
       second: Second,
       third: Third,
       fourth: Fourth,
-      fifth: Fifth
+      fifth: Fifth,
     ): TypeValidator<
       UnwrapTypeFromCoerceableOrValidator<First> &
         UnwrapTypeFromCoerceableOrValidator<Second> &
@@ -1890,14 +2543,14 @@ declare const types: {
       Third extends TypeValidator<any> | CoerceableToTypeValidator | unknown,
       Fourth extends TypeValidator<any> | CoerceableToTypeValidator | unknown,
       Fifth extends TypeValidator<any> | CoerceableToTypeValidator | unknown,
-      Sixth extends TypeValidator<any> | CoerceableToTypeValidator | unknown
+      Sixth extends TypeValidator<any> | CoerceableToTypeValidator | unknown,
     >(
       first: First,
       second: Second,
       third: Third,
       fourth: Fourth,
       fifth: Fifth,
-      sixth: Sixth
+      sixth: Sixth,
     ): TypeValidator<
       UnwrapTypeFromCoerceableOrValidator<First> &
         UnwrapTypeFromCoerceableOrValidator<Second> &
@@ -1913,7 +2566,7 @@ declare const types: {
       Fourth extends TypeValidator<any> | CoerceableToTypeValidator | unknown,
       Fifth extends TypeValidator<any> | CoerceableToTypeValidator | unknown,
       Sixth extends TypeValidator<any> | CoerceableToTypeValidator | unknown,
-      Seventh extends TypeValidator<any> | CoerceableToTypeValidator | unknown
+      Seventh extends TypeValidator<any> | CoerceableToTypeValidator | unknown,
     >(
       first: First,
       second: Second,
@@ -1921,7 +2574,7 @@ declare const types: {
       fourth: Fourth,
       fifth: Fifth,
       sixth: Sixth,
-      seventh: Seventh
+      seventh: Seventh,
     ): TypeValidator<
       UnwrapTypeFromCoerceableOrValidator<First> &
         UnwrapTypeFromCoerceableOrValidator<Second> &
@@ -1939,7 +2592,7 @@ declare const types: {
       Fifth extends TypeValidator<any> | CoerceableToTypeValidator | unknown,
       Sixth extends TypeValidator<any> | CoerceableToTypeValidator | unknown,
       Seventh extends TypeValidator<any> | CoerceableToTypeValidator | unknown,
-      Eighth extends TypeValidator<any> | CoerceableToTypeValidator | unknown
+      Eighth extends TypeValidator<any> | CoerceableToTypeValidator | unknown,
     >(
       first: First,
       second: Second,
@@ -1948,7 +2601,7 @@ declare const types: {
       fifth: Fifth,
       sixth: Sixth,
       seventh: Seventh,
-      eighth: Eighth
+      eighth: Eighth,
     ): TypeValidator<
       UnwrapTypeFromCoerceableOrValidator<First> &
         UnwrapTypeFromCoerceableOrValidator<Second> &
@@ -1968,7 +2621,7 @@ declare const types: {
       Sixth extends TypeValidator<any> | CoerceableToTypeValidator | unknown,
       Seventh extends TypeValidator<any> | CoerceableToTypeValidator | unknown,
       Eighth extends TypeValidator<any> | CoerceableToTypeValidator | unknown,
-      Ninth extends TypeValidator<any> | CoerceableToTypeValidator | unknown
+      Ninth extends TypeValidator<any> | CoerceableToTypeValidator | unknown,
     >(
       first: First,
       second: Second,
@@ -1978,7 +2631,7 @@ declare const types: {
       sixth: Sixth,
       seventh: Seventh,
       eighth: Eighth,
-      ninth: Ninth
+      ninth: Ninth,
     ): TypeValidator<
       UnwrapTypeFromCoerceableOrValidator<First> &
         UnwrapTypeFromCoerceableOrValidator<Second> &
@@ -2000,7 +2653,7 @@ declare const types: {
       Seventh extends TypeValidator<any> | CoerceableToTypeValidator | unknown,
       Eighth extends TypeValidator<any> | CoerceableToTypeValidator | unknown,
       Ninth extends TypeValidator<any> | CoerceableToTypeValidator | unknown,
-      Tenth extends TypeValidator<any> | CoerceableToTypeValidator | unknown
+      Tenth extends TypeValidator<any> | CoerceableToTypeValidator | unknown,
     >(
       first: First,
       second: Second,
@@ -2011,7 +2664,7 @@ declare const types: {
       seventh: Seventh,
       eighth: Eighth,
       ninth: Ninth,
-      tenth: Tenth
+      tenth: Tenth,
     ): TypeValidator<
       UnwrapTypeFromCoerceableOrValidator<First> &
         UnwrapTypeFromCoerceableOrValidator<Second> &
@@ -2028,10 +2681,10 @@ declare const types: {
   union: {
     <
       First extends TypeValidator<any> | CoerceableToTypeValidator | unknown,
-      Second extends TypeValidator<any> | CoerceableToTypeValidator | unknown
+      Second extends TypeValidator<any> | CoerceableToTypeValidator | unknown,
     >(
       first: First,
-      second: Second
+      second: Second,
     ): TypeValidator<
       | UnwrapTypeFromCoerceableOrValidator<First>
       | UnwrapTypeFromCoerceableOrValidator<Second>
@@ -2039,11 +2692,11 @@ declare const types: {
     <
       First extends TypeValidator<any> | CoerceableToTypeValidator | unknown,
       Second extends TypeValidator<any> | CoerceableToTypeValidator | unknown,
-      Third extends TypeValidator<any> | CoerceableToTypeValidator | unknown
+      Third extends TypeValidator<any> | CoerceableToTypeValidator | unknown,
     >(
       first: First,
       second: Second,
-      third: Third
+      third: Third,
     ): TypeValidator<
       | UnwrapTypeFromCoerceableOrValidator<First>
       | UnwrapTypeFromCoerceableOrValidator<Second>
@@ -2053,12 +2706,12 @@ declare const types: {
       First extends TypeValidator<any> | CoerceableToTypeValidator | unknown,
       Second extends TypeValidator<any> | CoerceableToTypeValidator | unknown,
       Third extends TypeValidator<any> | CoerceableToTypeValidator | unknown,
-      Fourth extends TypeValidator<any> | CoerceableToTypeValidator | unknown
+      Fourth extends TypeValidator<any> | CoerceableToTypeValidator | unknown,
     >(
       first: First,
       second: Second,
       third: Third,
-      fourth: Fourth
+      fourth: Fourth,
     ): TypeValidator<
       | UnwrapTypeFromCoerceableOrValidator<First>
       | UnwrapTypeFromCoerceableOrValidator<Second>
@@ -2070,13 +2723,13 @@ declare const types: {
       Second extends TypeValidator<any> | CoerceableToTypeValidator | unknown,
       Third extends TypeValidator<any> | CoerceableToTypeValidator | unknown,
       Fourth extends TypeValidator<any> | CoerceableToTypeValidator | unknown,
-      Fifth extends TypeValidator<any> | CoerceableToTypeValidator | unknown
+      Fifth extends TypeValidator<any> | CoerceableToTypeValidator | unknown,
     >(
       first: First,
       second: Second,
       third: Third,
       fourth: Fourth,
-      fifth: Fifth
+      fifth: Fifth,
     ): TypeValidator<
       | UnwrapTypeFromCoerceableOrValidator<First>
       | UnwrapTypeFromCoerceableOrValidator<Second>
@@ -2090,14 +2743,14 @@ declare const types: {
       Third extends TypeValidator<any> | CoerceableToTypeValidator | unknown,
       Fourth extends TypeValidator<any> | CoerceableToTypeValidator | unknown,
       Fifth extends TypeValidator<any> | CoerceableToTypeValidator | unknown,
-      Sixth extends TypeValidator<any> | CoerceableToTypeValidator | unknown
+      Sixth extends TypeValidator<any> | CoerceableToTypeValidator | unknown,
     >(
       first: First,
       second: Second,
       third: Third,
       fourth: Fourth,
       fifth: Fifth,
-      sixth: Sixth
+      sixth: Sixth,
     ): TypeValidator<
       | UnwrapTypeFromCoerceableOrValidator<First>
       | UnwrapTypeFromCoerceableOrValidator<Second>
@@ -2113,7 +2766,7 @@ declare const types: {
       Fourth extends TypeValidator<any> | CoerceableToTypeValidator | unknown,
       Fifth extends TypeValidator<any> | CoerceableToTypeValidator | unknown,
       Sixth extends TypeValidator<any> | CoerceableToTypeValidator | unknown,
-      Seventh extends TypeValidator<any> | CoerceableToTypeValidator | unknown
+      Seventh extends TypeValidator<any> | CoerceableToTypeValidator | unknown,
     >(
       first: First,
       second: Second,
@@ -2121,7 +2774,7 @@ declare const types: {
       fourth: Fourth,
       fifth: Fifth,
       sixth: Sixth,
-      seventh: Seventh
+      seventh: Seventh,
     ): TypeValidator<
       | UnwrapTypeFromCoerceableOrValidator<First>
       | UnwrapTypeFromCoerceableOrValidator<Second>
@@ -2139,7 +2792,7 @@ declare const types: {
       Fifth extends TypeValidator<any> | CoerceableToTypeValidator | unknown,
       Sixth extends TypeValidator<any> | CoerceableToTypeValidator | unknown,
       Seventh extends TypeValidator<any> | CoerceableToTypeValidator | unknown,
-      Eighth extends TypeValidator<any> | CoerceableToTypeValidator | unknown
+      Eighth extends TypeValidator<any> | CoerceableToTypeValidator | unknown,
     >(
       first: First,
       second: Second,
@@ -2148,7 +2801,7 @@ declare const types: {
       fifth: Fifth,
       sixth: Sixth,
       seventh: Seventh,
-      eighth: Eighth
+      eighth: Eighth,
     ): TypeValidator<
       | UnwrapTypeFromCoerceableOrValidator<First>
       | UnwrapTypeFromCoerceableOrValidator<Second>
@@ -2168,7 +2821,7 @@ declare const types: {
       Sixth extends TypeValidator<any> | CoerceableToTypeValidator | unknown,
       Seventh extends TypeValidator<any> | CoerceableToTypeValidator | unknown,
       Eighth extends TypeValidator<any> | CoerceableToTypeValidator | unknown,
-      Ninth extends TypeValidator<any> | CoerceableToTypeValidator | unknown
+      Ninth extends TypeValidator<any> | CoerceableToTypeValidator | unknown,
     >(
       first: First,
       second: Second,
@@ -2178,7 +2831,7 @@ declare const types: {
       sixth: Sixth,
       seventh: Seventh,
       eighth: Eighth,
-      ninth: Ninth
+      ninth: Ninth,
     ): TypeValidator<
       | UnwrapTypeFromCoerceableOrValidator<First>
       | UnwrapTypeFromCoerceableOrValidator<Second>
@@ -2200,7 +2853,7 @@ declare const types: {
       Seventh extends TypeValidator<any> | CoerceableToTypeValidator | unknown,
       Eighth extends TypeValidator<any> | CoerceableToTypeValidator | unknown,
       Ninth extends TypeValidator<any> | CoerceableToTypeValidator | unknown,
-      Tenth extends TypeValidator<any> | CoerceableToTypeValidator | unknown
+      Tenth extends TypeValidator<any> | CoerceableToTypeValidator | unknown,
     >(
       first: First,
       second: Second,
@@ -2211,7 +2864,7 @@ declare const types: {
       seventh: Seventh,
       eighth: Eighth,
       ninth: Ninth,
-      tenth: Tenth
+      tenth: Tenth,
     ): TypeValidator<
       | UnwrapTypeFromCoerceableOrValidator<First>
       | UnwrapTypeFromCoerceableOrValidator<Second>
@@ -2228,10 +2881,10 @@ declare const types: {
   or: {
     <
       First extends TypeValidator<any> | CoerceableToTypeValidator | unknown,
-      Second extends TypeValidator<any> | CoerceableToTypeValidator | unknown
+      Second extends TypeValidator<any> | CoerceableToTypeValidator | unknown,
     >(
       first: First,
-      second: Second
+      second: Second,
     ): TypeValidator<
       | UnwrapTypeFromCoerceableOrValidator<First>
       | UnwrapTypeFromCoerceableOrValidator<Second>
@@ -2239,11 +2892,11 @@ declare const types: {
     <
       First extends TypeValidator<any> | CoerceableToTypeValidator | unknown,
       Second extends TypeValidator<any> | CoerceableToTypeValidator | unknown,
-      Third extends TypeValidator<any> | CoerceableToTypeValidator | unknown
+      Third extends TypeValidator<any> | CoerceableToTypeValidator | unknown,
     >(
       first: First,
       second: Second,
-      third: Third
+      third: Third,
     ): TypeValidator<
       | UnwrapTypeFromCoerceableOrValidator<First>
       | UnwrapTypeFromCoerceableOrValidator<Second>
@@ -2253,12 +2906,12 @@ declare const types: {
       First extends TypeValidator<any> | CoerceableToTypeValidator | unknown,
       Second extends TypeValidator<any> | CoerceableToTypeValidator | unknown,
       Third extends TypeValidator<any> | CoerceableToTypeValidator | unknown,
-      Fourth extends TypeValidator<any> | CoerceableToTypeValidator | unknown
+      Fourth extends TypeValidator<any> | CoerceableToTypeValidator | unknown,
     >(
       first: First,
       second: Second,
       third: Third,
-      fourth: Fourth
+      fourth: Fourth,
     ): TypeValidator<
       | UnwrapTypeFromCoerceableOrValidator<First>
       | UnwrapTypeFromCoerceableOrValidator<Second>
@@ -2270,13 +2923,13 @@ declare const types: {
       Second extends TypeValidator<any> | CoerceableToTypeValidator | unknown,
       Third extends TypeValidator<any> | CoerceableToTypeValidator | unknown,
       Fourth extends TypeValidator<any> | CoerceableToTypeValidator | unknown,
-      Fifth extends TypeValidator<any> | CoerceableToTypeValidator | unknown
+      Fifth extends TypeValidator<any> | CoerceableToTypeValidator | unknown,
     >(
       first: First,
       second: Second,
       third: Third,
       fourth: Fourth,
-      fifth: Fifth
+      fifth: Fifth,
     ): TypeValidator<
       | UnwrapTypeFromCoerceableOrValidator<First>
       | UnwrapTypeFromCoerceableOrValidator<Second>
@@ -2290,14 +2943,14 @@ declare const types: {
       Third extends TypeValidator<any> | CoerceableToTypeValidator | unknown,
       Fourth extends TypeValidator<any> | CoerceableToTypeValidator | unknown,
       Fifth extends TypeValidator<any> | CoerceableToTypeValidator | unknown,
-      Sixth extends TypeValidator<any> | CoerceableToTypeValidator | unknown
+      Sixth extends TypeValidator<any> | CoerceableToTypeValidator | unknown,
     >(
       first: First,
       second: Second,
       third: Third,
       fourth: Fourth,
       fifth: Fifth,
-      sixth: Sixth
+      sixth: Sixth,
     ): TypeValidator<
       | UnwrapTypeFromCoerceableOrValidator<First>
       | UnwrapTypeFromCoerceableOrValidator<Second>
@@ -2313,7 +2966,7 @@ declare const types: {
       Fourth extends TypeValidator<any> | CoerceableToTypeValidator | unknown,
       Fifth extends TypeValidator<any> | CoerceableToTypeValidator | unknown,
       Sixth extends TypeValidator<any> | CoerceableToTypeValidator | unknown,
-      Seventh extends TypeValidator<any> | CoerceableToTypeValidator | unknown
+      Seventh extends TypeValidator<any> | CoerceableToTypeValidator | unknown,
     >(
       first: First,
       second: Second,
@@ -2321,7 +2974,7 @@ declare const types: {
       fourth: Fourth,
       fifth: Fifth,
       sixth: Sixth,
-      seventh: Seventh
+      seventh: Seventh,
     ): TypeValidator<
       | UnwrapTypeFromCoerceableOrValidator<First>
       | UnwrapTypeFromCoerceableOrValidator<Second>
@@ -2339,7 +2992,7 @@ declare const types: {
       Fifth extends TypeValidator<any> | CoerceableToTypeValidator | unknown,
       Sixth extends TypeValidator<any> | CoerceableToTypeValidator | unknown,
       Seventh extends TypeValidator<any> | CoerceableToTypeValidator | unknown,
-      Eighth extends TypeValidator<any> | CoerceableToTypeValidator | unknown
+      Eighth extends TypeValidator<any> | CoerceableToTypeValidator | unknown,
     >(
       first: First,
       second: Second,
@@ -2348,7 +3001,7 @@ declare const types: {
       fifth: Fifth,
       sixth: Sixth,
       seventh: Seventh,
-      eighth: Eighth
+      eighth: Eighth,
     ): TypeValidator<
       | UnwrapTypeFromCoerceableOrValidator<First>
       | UnwrapTypeFromCoerceableOrValidator<Second>
@@ -2368,7 +3021,7 @@ declare const types: {
       Sixth extends TypeValidator<any> | CoerceableToTypeValidator | unknown,
       Seventh extends TypeValidator<any> | CoerceableToTypeValidator | unknown,
       Eighth extends TypeValidator<any> | CoerceableToTypeValidator | unknown,
-      Ninth extends TypeValidator<any> | CoerceableToTypeValidator | unknown
+      Ninth extends TypeValidator<any> | CoerceableToTypeValidator | unknown,
     >(
       first: First,
       second: Second,
@@ -2378,7 +3031,7 @@ declare const types: {
       sixth: Sixth,
       seventh: Seventh,
       eighth: Eighth,
-      ninth: Ninth
+      ninth: Ninth,
     ): TypeValidator<
       | UnwrapTypeFromCoerceableOrValidator<First>
       | UnwrapTypeFromCoerceableOrValidator<Second>
@@ -2400,7 +3053,7 @@ declare const types: {
       Seventh extends TypeValidator<any> | CoerceableToTypeValidator | unknown,
       Eighth extends TypeValidator<any> | CoerceableToTypeValidator | unknown,
       Ninth extends TypeValidator<any> | CoerceableToTypeValidator | unknown,
-      Tenth extends TypeValidator<any> | CoerceableToTypeValidator | unknown
+      Tenth extends TypeValidator<any> | CoerceableToTypeValidator | unknown,
     >(
       first: First,
       second: Second,
@@ -2411,7 +3064,7 @@ declare const types: {
       seventh: Seventh,
       eighth: Eighth,
       ninth: Ninth,
-      tenth: Tenth
+      tenth: Tenth,
     ): TypeValidator<
       | UnwrapTypeFromCoerceableOrValidator<First>
       | UnwrapTypeFromCoerceableOrValidator<Second>
@@ -2427,10 +3080,10 @@ declare const types: {
   };
   mapOf<
     K extends TypeValidator<any> | CoerceableToTypeValidator | unknown,
-    V extends TypeValidator<any> | CoerceableToTypeValidator | unknown
+    V extends TypeValidator<any> | CoerceableToTypeValidator | unknown,
   >(
     keyType: K,
-    valueType: V
+    valueType: V,
   ): TypeValidator<
     Map<
       UnwrapTypeFromCoerceableOrValidator<K>,
@@ -2438,10 +3091,10 @@ declare const types: {
     >
   >;
   setOf<T extends TypeValidator<any> | CoerceableToTypeValidator | unknown>(
-    itemType: T
+    itemType: T,
   ): TypeValidator<Set<UnwrapTypeFromCoerceableOrValidator<T>>>;
   maybe<T extends TypeValidator<any> | CoerceableToTypeValidator | unknown>(
-    itemType: T
+    itemType: T,
   ): TypeValidator<UnwrapTypeFromCoerceableOrValidator<T> | undefined | null>;
   objectWithProperties<
     T extends {
@@ -2449,9 +3102,9 @@ declare const types: {
         | TypeValidator<any>
         | CoerceableToTypeValidator
         | unknown;
-    }
+    },
   >(
-    properties: T
+    properties: T,
   ): TypeValidator<{
     [key in keyof T]: UnwrapTypeFromCoerceableOrValidator<T[key]>;
   }>;
@@ -2461,19 +3114,19 @@ declare const types: {
         | TypeValidator<any>
         | CoerceableToTypeValidator
         | unknown;
-    }
+    },
   >(
-    properties: T
+    properties: T,
   ): TypeValidator<{
     [key in keyof T]: UnwrapTypeFromCoerceableOrValidator<T[key]>;
   }>;
 
   mappingObjectOf<
     Values extends TypeValidator<any> | CoerceableToTypeValidator | unknown,
-    Keys extends TypeValidator<any> | CoerceableToTypeValidator | unknown
+    Keys extends TypeValidator<any> | CoerceableToTypeValidator | unknown,
   >(
     keyType: Keys,
-    valueType: Values
+    valueType: Values,
   ): TypeValidator<
     Record<
       UnwrapTypeFromCoerceableOrValidator<Keys> extends string | number | symbol
@@ -2484,10 +3137,10 @@ declare const types: {
   >;
   record<
     Values extends TypeValidator<any> | CoerceableToTypeValidator | unknown,
-    Keys extends TypeValidator<any> | CoerceableToTypeValidator | unknown
+    Keys extends TypeValidator<any> | CoerceableToTypeValidator | unknown,
   >(
     keyType: Keys,
-    valueType: Values
+    valueType: Values,
   ): TypeValidator<
     Record<
       UnwrapTypeFromCoerceableOrValidator<Keys> extends string | number | symbol
@@ -2502,9 +3155,9 @@ declare const types: {
         | TypeValidator<any>
         | CoerceableToTypeValidator
         | unknown;
-    }
+    },
   >(
-    properties: T
+    properties: T,
   ): TypeValidator<{
     [key in keyof T]:
       | UnwrapTypeFromCoerceableOrValidator<T[key]>
@@ -2514,47 +3167,29 @@ declare const types: {
   tuple: {
     <
       First extends TypeValidator<any> | CoerceableToTypeValidator | unknown,
-      Second extends TypeValidator<any> | CoerceableToTypeValidator | unknown
-    >(
-      first: First,
-      second: Second
-    ): TypeValidator<
-      [
-        UnwrapTypeFromCoerceableOrValidator<First>,
-        UnwrapTypeFromCoerceableOrValidator<Second>
-      ]
-    >;
-    <
-      First extends TypeValidator<any> | CoerceableToTypeValidator | unknown,
       Second extends TypeValidator<any> | CoerceableToTypeValidator | unknown,
-      Third extends TypeValidator<any> | CoerceableToTypeValidator | unknown
     >(
       first: First,
       second: Second,
-      third: Third
     ): TypeValidator<
       [
         UnwrapTypeFromCoerceableOrValidator<First>,
         UnwrapTypeFromCoerceableOrValidator<Second>,
-        UnwrapTypeFromCoerceableOrValidator<Third>
       ]
     >;
     <
       First extends TypeValidator<any> | CoerceableToTypeValidator | unknown,
       Second extends TypeValidator<any> | CoerceableToTypeValidator | unknown,
       Third extends TypeValidator<any> | CoerceableToTypeValidator | unknown,
-      Fourth extends TypeValidator<any> | CoerceableToTypeValidator | unknown
     >(
       first: First,
       second: Second,
       third: Third,
-      fourth: Fourth
     ): TypeValidator<
       [
         UnwrapTypeFromCoerceableOrValidator<First>,
         UnwrapTypeFromCoerceableOrValidator<Second>,
         UnwrapTypeFromCoerceableOrValidator<Third>,
-        UnwrapTypeFromCoerceableOrValidator<Fourth>
       ]
     >;
     <
@@ -2562,20 +3197,17 @@ declare const types: {
       Second extends TypeValidator<any> | CoerceableToTypeValidator | unknown,
       Third extends TypeValidator<any> | CoerceableToTypeValidator | unknown,
       Fourth extends TypeValidator<any> | CoerceableToTypeValidator | unknown,
-      Fifth extends TypeValidator<any> | CoerceableToTypeValidator | unknown
     >(
       first: First,
       second: Second,
       third: Third,
       fourth: Fourth,
-      fifth: Fifth
     ): TypeValidator<
       [
         UnwrapTypeFromCoerceableOrValidator<First>,
         UnwrapTypeFromCoerceableOrValidator<Second>,
         UnwrapTypeFromCoerceableOrValidator<Third>,
         UnwrapTypeFromCoerceableOrValidator<Fourth>,
-        UnwrapTypeFromCoerceableOrValidator<Fifth>
       ]
     >;
     <
@@ -2584,14 +3216,12 @@ declare const types: {
       Third extends TypeValidator<any> | CoerceableToTypeValidator | unknown,
       Fourth extends TypeValidator<any> | CoerceableToTypeValidator | unknown,
       Fifth extends TypeValidator<any> | CoerceableToTypeValidator | unknown,
-      Sixth extends TypeValidator<any> | CoerceableToTypeValidator | unknown
     >(
       first: First,
       second: Second,
       third: Third,
       fourth: Fourth,
       fifth: Fifth,
-      sixth: Sixth
     ): TypeValidator<
       [
         UnwrapTypeFromCoerceableOrValidator<First>,
@@ -2599,7 +3229,6 @@ declare const types: {
         UnwrapTypeFromCoerceableOrValidator<Third>,
         UnwrapTypeFromCoerceableOrValidator<Fourth>,
         UnwrapTypeFromCoerceableOrValidator<Fifth>,
-        UnwrapTypeFromCoerceableOrValidator<Sixth>
       ]
     >;
     <
@@ -2609,7 +3238,6 @@ declare const types: {
       Fourth extends TypeValidator<any> | CoerceableToTypeValidator | unknown,
       Fifth extends TypeValidator<any> | CoerceableToTypeValidator | unknown,
       Sixth extends TypeValidator<any> | CoerceableToTypeValidator | unknown,
-      Seventh extends TypeValidator<any> | CoerceableToTypeValidator | unknown
     >(
       first: First,
       second: Second,
@@ -2617,7 +3245,6 @@ declare const types: {
       fourth: Fourth,
       fifth: Fifth,
       sixth: Sixth,
-      seventh: Seventh
     ): TypeValidator<
       [
         UnwrapTypeFromCoerceableOrValidator<First>,
@@ -2626,7 +3253,6 @@ declare const types: {
         UnwrapTypeFromCoerceableOrValidator<Fourth>,
         UnwrapTypeFromCoerceableOrValidator<Fifth>,
         UnwrapTypeFromCoerceableOrValidator<Sixth>,
-        UnwrapTypeFromCoerceableOrValidator<Seventh>
       ]
     >;
     <
@@ -2637,7 +3263,6 @@ declare const types: {
       Fifth extends TypeValidator<any> | CoerceableToTypeValidator | unknown,
       Sixth extends TypeValidator<any> | CoerceableToTypeValidator | unknown,
       Seventh extends TypeValidator<any> | CoerceableToTypeValidator | unknown,
-      Eighth extends TypeValidator<any> | CoerceableToTypeValidator | unknown
     >(
       first: First,
       second: Second,
@@ -2646,7 +3271,6 @@ declare const types: {
       fifth: Fifth,
       sixth: Sixth,
       seventh: Seventh,
-      eighth: Eighth
     ): TypeValidator<
       [
         UnwrapTypeFromCoerceableOrValidator<First>,
@@ -2656,7 +3280,6 @@ declare const types: {
         UnwrapTypeFromCoerceableOrValidator<Fifth>,
         UnwrapTypeFromCoerceableOrValidator<Sixth>,
         UnwrapTypeFromCoerceableOrValidator<Seventh>,
-        UnwrapTypeFromCoerceableOrValidator<Eighth>
       ]
     >;
     <
@@ -2668,7 +3291,6 @@ declare const types: {
       Sixth extends TypeValidator<any> | CoerceableToTypeValidator | unknown,
       Seventh extends TypeValidator<any> | CoerceableToTypeValidator | unknown,
       Eighth extends TypeValidator<any> | CoerceableToTypeValidator | unknown,
-      Ninth extends TypeValidator<any> | CoerceableToTypeValidator | unknown
     >(
       first: First,
       second: Second,
@@ -2678,7 +3300,6 @@ declare const types: {
       sixth: Sixth,
       seventh: Seventh,
       eighth: Eighth,
-      ninth: Ninth
     ): TypeValidator<
       [
         UnwrapTypeFromCoerceableOrValidator<First>,
@@ -2689,7 +3310,6 @@ declare const types: {
         UnwrapTypeFromCoerceableOrValidator<Sixth>,
         UnwrapTypeFromCoerceableOrValidator<Seventh>,
         UnwrapTypeFromCoerceableOrValidator<Eighth>,
-        UnwrapTypeFromCoerceableOrValidator<Ninth>
       ]
     >;
     <
@@ -2702,7 +3322,6 @@ declare const types: {
       Seventh extends TypeValidator<any> | CoerceableToTypeValidator | unknown,
       Eighth extends TypeValidator<any> | CoerceableToTypeValidator | unknown,
       Ninth extends TypeValidator<any> | CoerceableToTypeValidator | unknown,
-      Tenth extends TypeValidator<any> | CoerceableToTypeValidator | unknown
     >(
       first: First,
       second: Second,
@@ -2713,7 +3332,6 @@ declare const types: {
       seventh: Seventh,
       eighth: Eighth,
       ninth: Ninth,
-      tenth: Tenth
     ): TypeValidator<
       [
         UnwrapTypeFromCoerceableOrValidator<First>,
@@ -2725,13 +3343,48 @@ declare const types: {
         UnwrapTypeFromCoerceableOrValidator<Seventh>,
         UnwrapTypeFromCoerceableOrValidator<Eighth>,
         UnwrapTypeFromCoerceableOrValidator<Ninth>,
-        UnwrapTypeFromCoerceableOrValidator<Tenth>
+      ]
+    >;
+    <
+      First extends TypeValidator<any> | CoerceableToTypeValidator | unknown,
+      Second extends TypeValidator<any> | CoerceableToTypeValidator | unknown,
+      Third extends TypeValidator<any> | CoerceableToTypeValidator | unknown,
+      Fourth extends TypeValidator<any> | CoerceableToTypeValidator | unknown,
+      Fifth extends TypeValidator<any> | CoerceableToTypeValidator | unknown,
+      Sixth extends TypeValidator<any> | CoerceableToTypeValidator | unknown,
+      Seventh extends TypeValidator<any> | CoerceableToTypeValidator | unknown,
+      Eighth extends TypeValidator<any> | CoerceableToTypeValidator | unknown,
+      Ninth extends TypeValidator<any> | CoerceableToTypeValidator | unknown,
+      Tenth extends TypeValidator<any> | CoerceableToTypeValidator | unknown,
+    >(
+      first: First,
+      second: Second,
+      third: Third,
+      fourth: Fourth,
+      fifth: Fifth,
+      sixth: Sixth,
+      seventh: Seventh,
+      eighth: Eighth,
+      ninth: Ninth,
+      tenth: Tenth,
+    ): TypeValidator<
+      [
+        UnwrapTypeFromCoerceableOrValidator<First>,
+        UnwrapTypeFromCoerceableOrValidator<Second>,
+        UnwrapTypeFromCoerceableOrValidator<Third>,
+        UnwrapTypeFromCoerceableOrValidator<Fourth>,
+        UnwrapTypeFromCoerceableOrValidator<Fifth>,
+        UnwrapTypeFromCoerceableOrValidator<Sixth>,
+        UnwrapTypeFromCoerceableOrValidator<Seventh>,
+        UnwrapTypeFromCoerceableOrValidator<Eighth>,
+        UnwrapTypeFromCoerceableOrValidator<Ninth>,
+        UnwrapTypeFromCoerceableOrValidator<Tenth>,
       ]
     >;
   };
 
   coerce: <V extends CoerceableToTypeValidator | TypeValidator<any> | unknown>(
-    value: V
+    value: V,
   ) => TypeValidator<UnwrapTypeFromCoerceableOrValidator<V>>;
 
   FILE: TypeValidator<FILE>;
@@ -2748,18 +3401,201 @@ declare const types: {
   };
 };
 
+declare type TypeValidator<T> = (value: any) => value is T;
+
+declare type CoerceToTypeValidator<V extends CoerceableToTypeValidator> =
+  V extends StringConstructor
+    ? TypeValidator<string>
+    : V extends NumberConstructor
+      ? TypeValidator<number>
+      : V extends BooleanConstructor
+        ? TypeValidator<boolean>
+        : V extends BigIntConstructor
+          ? TypeValidator<BigInt>
+          : V extends SymbolConstructor
+            ? TypeValidator<Symbol>
+            : V extends RegExpConstructor
+              ? TypeValidator<RegExp>
+              : V extends ArrayConstructor
+                ? TypeValidator<Array<unknown>>
+                : V extends SetConstructor
+                  ? TypeValidator<Set<unknown>>
+                  : V extends MapConstructor
+                    ? TypeValidator<Map<unknown, unknown>>
+                    : V extends ObjectConstructor
+                      ? TypeValidator<{
+                          [key: string | number | symbol]: unknown;
+                        }>
+                      : V extends DateConstructor
+                        ? TypeValidator<Date>
+                        : V extends FunctionConstructor
+                          ? TypeValidator<Function>
+                          : V extends ArrayBufferConstructor
+                            ? TypeValidator<ArrayBuffer>
+                            : V extends SharedArrayBufferConstructor
+                              ? TypeValidator<SharedArrayBuffer>
+                              : V extends DataViewConstructor
+                                ? TypeValidator<DataView>
+                                : V extends Int8ArrayConstructor
+                                  ? TypeValidator<Int8Array>
+                                  : V extends Uint8ArrayConstructor
+                                    ? TypeValidator<Uint8Array>
+                                    : V extends Uint8ClampedArrayConstructor
+                                      ? TypeValidator<Uint8ClampedArray>
+                                      : V extends Int16ArrayConstructor
+                                        ? TypeValidator<Int16Array>
+                                        : V extends Uint16ArrayConstructor
+                                          ? TypeValidator<Uint16Array>
+                                          : V extends Int32ArrayConstructor
+                                            ? TypeValidator<Int32Array>
+                                            : V extends Uint32ArrayConstructor
+                                              ? TypeValidator<Uint32Array>
+                                              : V extends Float32ArrayConstructor
+                                                ? TypeValidator<Float32Array>
+                                                : V extends Float64ArrayConstructor
+                                                  ? TypeValidator<Float64Array>
+                                                  : V extends RegExp
+                                                    ? TypeValidator<string>
+                                                    : V extends {}
+                                                      ? TypeValidator<{
+                                                          [key in keyof V]: CoerceToTypeValidator<
+                                                            V[key]
+                                                          >;
+                                                        }>
+                                                      : V extends []
+                                                        ? TypeValidator<[]>
+                                                        : V extends [any]
+                                                          ? TypeValidator<
+                                                              Array<
+                                                                CoerceToTypeValidator<
+                                                                  V[0]
+                                                                >
+                                                              >
+                                                            >
+                                                          : V extends Array<any>
+                                                            ? TypeValidator<
+                                                                Array<unknown>
+                                                              >
+                                                            : V extends {
+                                                                  new (
+                                                                    ...args: any
+                                                                  ): any;
+                                                                }
+                                                              ? TypeValidator<
+                                                                  InstanceType<V>
+                                                                >
+                                                              : TypeValidator<V>;
+
+declare type CoerceableToTypeValidator =
+  | boolean
+  | number
+  | string
+  | bigint
+  | undefined
+  | null
+  | RegExp
+  | StringConstructor
+  | NumberConstructor
+  | BooleanConstructor
+  | BigIntConstructor
+  | SymbolConstructor
+  | RegExpConstructor
+  | ArrayConstructor
+  | SetConstructor
+  | MapConstructor
+  | ObjectConstructor
+  | DateConstructor
+  | FunctionConstructor
+  | ArrayBufferConstructor
+  | SharedArrayBufferConstructor
+  | DataViewConstructor
+  | Int8ArrayConstructor
+  | Uint8ArrayConstructor
+  | Uint8ClampedArrayConstructor
+  | Int16ArrayConstructor
+  | Uint16ArrayConstructor
+  | Int32ArrayConstructor
+  | Uint32ArrayConstructor
+  | Float32ArrayConstructor
+  | Float64ArrayConstructor
+  | {}
+  | []
+  | [any]
+  | Array<any>
+  | {
+      new (...args: any): any;
+    };
+
+declare type UnwrapTypeFromCoerceableOrValidator<
+  V extends CoerceableToTypeValidator | TypeValidator<any> | unknown,
+> =
+  V extends TypeValidator<infer T>
+    ? T
+    : V extends CoerceableToTypeValidator
+      ? CoerceToTypeValidator<V> extends TypeValidator<infer T>
+        ? T
+        : never
+      : unknown;
+
 /**
- * Returns whether `value` is of type `type`. Useful for validating that values have the correct type at runtime, in library functions or etc.
+ * Returns whether `value` is of type `type`. Useful for validating that values
+ * have the correct type at runtime, in library functions or etc.
  *
- * Run `help(is)` for more info.
+ * The `type` parameter can be any of the following:
+ *
+ * - a TypeValidator function from the `types` namespace
+ * - a global constructor like `String`, `Number`, `Boolean`, `Set`,
+ *   `Int8Array`, etc
+ * - a user-defined class
+ * - a primitive value like `true`, `false`, `null`, or `42`
+ * - a Regular Expression (to match strings that match the regexp)
+ * - an object or array containing any combination of the above
+ *
+ * Note that yavascript has the following global aliases defined, which are also
+ * valid types:
+ *
+ * ```ts
+ * const bigint = BigInt;
+ * const boolean = Boolean;
+ * const number = Number;
+ * const string = String;
+ * const symbol = Symbol;
+ * ```
+ *
+ * ## Example
+ *
+ * ```ts
+ * is(42, Number); // true
+ * is(42, number); // true
+ * is(42, types.number); // true
+ *
+ * is(42, String); // false
+ * is(42, Set); // false
+ * is(42, Array); // false
+ *
+ * is(42, 42); // true
+ * is(42, 45); // false
+ *
+ * is({ kind: "success", data: 99 }, { kind: "success" }); // true
+ * ```
+ *
+ * ```ts
+ * // Defined in yavascript/src/api/is
+ * declare function is(value: any, type: TypeValidator<any>): boolean;
+ * ```
+ *
+ * See also {@link types} (which contains {@link TypeValidator}s that can be
+ * used by `is`) and {@link assert.type} (which throws an error instead of
+ * returning a boolean).
  */
 declare const is: <T extends TypeValidator<any> | CoerceableToTypeValidator>(
   value: any,
-  type: T
+  type: T,
 ) => value is UnwrapTypeFromCoerceableOrValidator<T>;
 
 /**
- * Alias to {@link is}, for Civet, because `is` is a reserved keyword in Civet.
+ * Alias to {@link is}, for when using the Civet language, because `is` is a
+ * reserved keyword in Civet.
  */
 declare const _is: typeof is;
 
@@ -2772,30 +3608,35 @@ declare const assert: {
    */
   <ValueType>(
     value: ValueType,
-    message?: string
+    message?: string,
   ): asserts value is ValueType extends null | undefined | false | 0 | ""
     ? never
     : ValueType;
 
   /**
-   * Throws an error if `value` is not of the type `type`.
+   * Throws an error if its argument isn't the correct type.
    *
-   * `type` should be either a {@link TypeValidator}, or a value which can be coerced into one via {@link types.coerce}.
+   * @param value - The value to test the type of
+   * @param type - The type that `value` should be, as either a `TypeValidator` (from the `types.*` namespace) or a value which can be coerced into a `TypeValidator` via the `types.coerce` function, like `String`, `Boolean`, etc.
+   * @param message - An optional error message to use. If unspecified, a generic-but-descriptive message will be used.
    */
   type: <T extends TypeValidator<any> | CoerceableToTypeValidator>(
     value: any,
     type: T,
-    optionalMessage?: string
+    optionalMessage?: string,
   ) => asserts value is UnwrapTypeFromCoerceableOrValidator<T>;
 };
 
+/**
+ * This API is a work-in-progress and is subject to change at any time.
+ */
 interface InteractivePrompt {
   prompt?: () => string;
   printInput?: (input: string) => void;
   historyFileName?: string;
   getCompletions?: (
     line: string,
-    pos: number
+    pos: number,
   ) => {
     // TODO refactor these to have better key names
     tab: Array<string>;
@@ -2807,6 +3648,9 @@ interface InteractivePrompt {
   start(): void;
 }
 
+/**
+ * This API is a work-in-progress and is subject to change at any time.
+ */
 interface InteractivePromptConstructor {
   new (
     handleInput: (input: string) => void,
@@ -2816,27 +3660,29 @@ interface InteractivePromptConstructor {
       historyFileName?: string;
       getCompletions?: (
         line: string,
-        pos: number
+        pos: number,
       ) => {
         // TODO refactor these to have better key names
         tab: Array<string>;
         pos: number;
         ctx: { [key: string | number | symbol]: any };
       };
-    }
+    },
   ): InteractivePrompt;
 
   prototype: InteractivePrompt;
 }
 
-/** wip experimental use at your own risk */
+/**
+ * This API is a work-in-progress and is subject to change at any time.
+ */
 declare var InteractivePrompt: InteractivePromptConstructor;
 
 /**
  * Launch the Yavascript REPL (read-eval-print-loop).
  *
  * @param context Variables to make available as globals within the repl.
- * @param lang The langauge to use in the repl. Defaults to "javascript".
+ * @param lang The language to use in the repl. Defaults to "javascript".
  */
 declare const startRepl: {
   (
@@ -2850,7 +3696,7 @@ declare const startRepl: {
       | "tsx"
       | "coffee"
       | "coffeescript"
-      | "civet"
+      | "civet",
   ): void;
 
   /**
@@ -2863,6 +3709,19 @@ declare const startRepl: {
 /**
  * An object that points to a git repository on disk and provides utility
  * methods for getting information from that repo.
+ *
+ * To use it, construct a GitRepo object, passing in the path to the repo:
+ *
+ * ```ts
+ * // The path here is just an example
+ * const repo = new GitRepo("/home/suchipi/Code/yavascript");
+ * ```
+ *
+ * Then, you can use methods/properties on the `repo` object:
+ *
+ * ```ts
+ * console.log(repo.branchName() || repo.commitSHA());
+ * ```
  */
 declare class GitRepo {
   /**
@@ -2870,6 +3729,88 @@ declare class GitRepo {
    * directory ancestry to find a `.git` folder, then returns the Path that
    * contains that `.git` folder. If no `.git` folder is found, an error will be
    * thrown.
+   *
+   * For example, if you have a git repo at `/home/suchipi/Code/my-project`,
+   * such that `/home/suchipi/Code/my-project/.git` exists, calling
+   * `GitRepo.findRoot("/home/suchipi/Code/my-project/src/index.js")` will
+   * return a `Path` object pointing to `/home/suchipi/Code/my-project`.
+   *
+   * This function can be useful in order to set the current working directory
+   * of a script relative to the root of the git repo the script appears in. By
+   * doing so, the script can be invoked from any directory.
+   *
+   * For instance, consider this theoretical filesystem layout:
+   *
+   * ```
+   * my-project
+   * - src
+   *   - my-script.js
+   * - README.md
+   * ```
+   *
+   * If `my-script.js` contained the following content:
+   *
+   * ```ts
+   * #!/usr/bin/env yavascript
+   *
+   * cat("README.md");
+   * ```
+   *
+   * Then running `src/my-script.js` would print the contents of the README as
+   * expected.
+   *
+   * However, suppose someone ran the script from a different folder:
+   *
+   * ```sh
+   * $ cd src
+   * $ ./my-script.js
+   * ```
+   *
+   * Now an error occurs!
+   *
+   * To make the script resilient against this, you can use `cd` at the top of
+   * the script:
+   *
+   * ```ts
+   * #!/usr/bin/env yavascript
+   *
+   * // __dirname is a special variable that refers to the folder the current script is in.
+   * cd(__dirname);
+   * cd("..");
+   *
+   * cat("README.md");
+   * ```
+   *
+   * However, if the location of `my-script.js` later changes, you will have to
+   * remember to update the script. For instance, if `src/my-script.js` got
+   * moved to `src/tools/my-script.js`, you would need to update the script like
+   * so:
+   *
+   * ```ts
+   * #!/usr/bin/env yavascript
+   *
+   * cd(__dirname);
+   * cd("../.."); // Changed this line
+   *
+   * cat("README.md");
+   * ```
+   *
+   * Since `README.md` will always be in the repository root, using
+   * `GitRepo.findRoot` would make the `cd` resilient against file moves:
+   *
+   * ```ts
+   * #!/usr/bin/env yavascript
+   *
+   * cd(GitRepo.findRoot(__dirname));
+   *
+   * cat("README.md");
+   * ```
+   *
+   * Depending on how you anticipate your codebase changing over time, and how
+   * you expect others to use your scripts, it might make sense to use
+   * `cd(__dirname)`, `cd(GitRepo.findRoot(__dirname))`, or no `cd` at all. Pick what
+   * makes the most sense for your situation.
+   *
    */
   static findRoot(fromPath: string | Path): Path;
 
@@ -2885,9 +3826,24 @@ declare class GitRepo {
   repoDir: Path;
 
   /**
-   * Returns the commit SHA the git repo is currently pointed at.
+   * Returns the full SHA-1 hash string associated with the repo's current
+   * commit.
    *
-   * This is done by running `git rev-parse HEAD`.
+   * For example:
+   *
+   * ```ts
+   * const repo = new GitRepo(".");
+   * const sha = repo.commitSHA();
+   * console.log(sha);
+   * // "2a0a15f9872406faebcac694562efeae3447a4ba"
+   * ```
+   *
+   * To obtain this information, the command `git rev-parse HEAD` gets run
+   * within the repo's directory.
+   *
+   * > If the repo has unstaged or uncommitted changes, that state will NOT be
+   * > reflected in the SHA-1 hash. As such, it may be desirable to use this
+   * > method in conjunction with `GitRepo.prototype.isWorkingTreeDirty`.
    */
   commitSHA(): string;
 
@@ -2895,7 +3851,20 @@ declare class GitRepo {
    * If the commit SHA the git repo is currently pointed at is the tip of a
    * named branch, returns the branch name. Otherwise, returns `null`.
    *
-   * This is done by running `git rev-parse --abbrev-ref HEAD`.
+   * This is done by running `git rev-parse --abbrev-ref HEAD` within the repo
+   * directory.
+   *
+   * Example:
+   *
+   * ```ts
+   * const repo = new GitRepo(".");
+   * const branch = repo.branchName();
+   * console.log(branch);
+   * // "main"
+   * ```
+   *
+   * > The most common situation where there is no current branch is when the
+   * > repository is in "detached HEAD" state.
    */
   branchName(): string | null;
 
@@ -2904,15 +3873,35 @@ declare class GitRepo {
    * git repo. `true` means there are changes, `false` means there are no
    * changes (ie. the repo is clean).
    *
-   * This is done by running `git status --quiet`.
+   * This is done by running `git status --quiet` within the repo directory.
    */
   isWorkingTreeDirty(): boolean;
 
   /**
-   * Returns whether the provided path is ignored by git.
+   * Returns a boolean indicating whether the provided path is ignored by one or
+   * more `.gitignore` files in the repository.
    *
-   * If `path` is an absolute path, it must be a child directory of this GitRepo
-   * object's `repoDir`, or else an error will be thrown.
+   * Example:
+   *
+   * ```ts
+   * const repo = new GitRepo(".");
+   * const ignoreStatus = repo.isIgnored("README.md");
+   * console.log(ignoreStatus);
+   * // false
+   * ```
+   *
+   * To obtain this information, the command `git check-ignore <the-path>` gets
+   * run within the repo's directory.
+   *
+   * An error will be thrown if the provided path is not within the repository's
+   * directory tree. For instance, calling `gitRepo.isIgnored("/tmp")` on a
+   * `gitRepo` pointed at `/home/suchipi/my-project` would throw an error,
+   * because `/tmp` is not a child of `/home/suchipi/my-project`.
+   *
+   * > NOTE: When passing relative paths to `isIgnored`, they will be resolved
+   * > relative to the repo root, NOT relative to `pwd()`. It's best practice to
+   * > always pass around absolute paths in your program instead of relative
+   * > ones so that this type of ambiguity is avoided.
    */
   isIgnored(path: string | Path): boolean;
 }
@@ -2941,29 +3930,94 @@ declare const logger: {
    * functions which receive `logging.info` as an option, like {@link exec},
    * {@link copy}, and {@link glob}.
    *
-   * The default value of `logger.info` writes dimmed text to stdout.
+   * The default value of `logger.info` writes dimmed text to stderr.
    */
   info: (...args: Array<any>) => void;
+
+  /**
+   * This property is used as the default value for `warn` in yavascript API
+   * functions which receive `logging.warn` as an option, like {@link readEnvBool}.
+   *
+   * The default value of `logger.warn` writes yellow text to stderr.
+   */
+  warn: (...args: Array<any>) => void;
 };
 
+/**
+ * The properties of the `JSX` global can be modified to change how JSX syntax
+ * gets compiled by yavascript. Those properties are:
+ *
+ * - `pragma` (string): The JavaScript expression that should be called to
+ *   create JSX elements. Defaults to "JSX.createElement".
+ * - `pragmaFrag` (string): The JavaScript expression that should be used when
+ *   creating JSX fragments. Defaults to "JSX.Fragment".
+ * - `createElement` (function): The function used to create JSX elements,
+ *   unless `JSX.pragma` has been changed.
+ * - `Element` (symbol): used by the default `JSX.createElement` function to
+ *   identify JSX elements.
+ * - `Fragment` (symbol): used by the default `JSX.createElement` function to
+ *   identify JSX fragments. Referenced by the default value for
+ *   `JSX.pragmaFrag`.
+ *
+ * Modifying these properties will change how JSX syntax gets compiled.
+ *
+ * For instance, to use React for JSX, you could either replace
+ * `JSX.createElement` and `JSX.Fragment` with React's versions:
+ *
+ * ```ts
+ * import * as React from "npm:react";
+ *
+ * JSX.createElement = React.createElement;
+ * JSX.Fragment = React.Fragment;
+ * ```
+ *
+ * Or, you could change `JSX.pragma` and `JSX.pragmaFrag` to reference React
+ * directly:
+ *
+ * ```ts
+ * JSX.pragma = "React.createElement";
+ * JSX.pragmaFrag = "React.Fragment";
+ * ```
+ *
+ * Note however, that changes to `pragma` and `pragmaFrag` will only affect JSX
+ * appearing in files which are loaded _after_ the change, but changing
+ * `createElement` and `Fragment` will affect all JSX syntax appearing after the
+ * change, even within the same file.
+ *
+ * Whichever approach you take, you should also update `types.JSX.Element` and
+ * `types.JSX.Fragment` such that the expression `types.JSX.Element(<a />) &&
+ * types.JSX.Fragment(<></>)` is always `true`. To do that for React, you would
+ * do:
+ *
+ * ```ts
+ * types.JSX.Element = React.isValidElement;
+ * types.JSX.Fragment = (value) => {
+ *   return React.isValidElement(value) && value.type === React.Fragment;
+ * };
+ * ```
+ */
 declare namespace JSX {
   /**
+   *
    * A string containing the expression that should be called to create JSX
    * elements. yavascript's internals use this string to transpile JSX syntax.
    *
-   * Defaults to "JSX.createElement".
+   * The default value is "JSX.createElement".
    *
-   * If changed, any JSX code loaded afterwards will use a different
-   * expression.
+   * If changed, any JSX code loaded afterwards will use a different expression.
    *
    * Note that if you change this, you need to verify that the following
-   * expression always evaluates to `true` (by changing {@link types.JSX.Element}
-   * and {@link types.JSX.Fragment}):
+   * expression always evaluates to `true` (by changing `types.JSX.Element` and
+   * `types.JSX.Fragment`):
+   *
    * ```jsx
-   * types.JSX.Element(<a />) && types.JSX.Fragment(<></>)
+   * types.JSX.Element(<a />) && types.JSX.Fragment(<></>);
    * ```
    *
    * Failure to uphold this guarantee indicates a bug.
+   *
+   * For more info, including info on how to change how JSX is compiled, see
+   * {@link JSX}.
    */
   export let pragma: string;
 
@@ -2974,25 +4028,69 @@ declare namespace JSX {
    *
    * Defaults to "JSX.Fragment".
    *
-   * If changed, any JSX code loaded afterwards will use a different
-   * expression.
+   * If changed, any JSX code loaded afterwards will use a different expression.
    *
    * Note that if you change this, you need to verify that the following
-   * expression always evaluates to `true` (by changing {@link types.JSX.Element}
-   * and {@link types.JSX.Fragment}):
+   * expression always evaluates to `true` (by changing `types.JSX.Element` and
+   * `types.JSX.Fragment`):
+   *
    * ```jsx
-   * types.JSX.Element(<a />) && types.JSX.Fragment(<></>)
+   * types.JSX.Element(<a />) && types.JSX.Fragment(<></>);
    * ```
    *
    * Failure to uphold this guarantee indicates a bug.
+   *
+   * For more info, including info on how to change how JSX is compiled, see
+   * {@link JSX}.
    */
   export let pragmaFrag: string;
 
+  /**
+   * `JSX.Element` is a Symbol. The default implementation of
+   * `JSX.createElement` creates objects whose `$$typeof` property is set to
+   * `JSX.Element`, and type validator functions under the `types.JSX.*`
+   * namespace look for this property in order to determine whether an object is
+   * a JSX element, as created via `JSX.createElement` or JSX syntax.
+   *
+   * ```jsx
+   * // This gets compiled internally by yavascript into:
+   * // const a = JSX.createElement('a', null);
+   * const a = <a />;
+   *
+   * console.log(a);
+   * // {
+   * //   $$typeof: Symbol(JSX.Element)
+   * //   type: "a"
+   * //   props: null
+   * //   key: null
+   * // }
+   *
+   * console.log(a.$$typeof === JSX.Element);
+   * // true
+   * ```
+   *
+   * There is also a TypeScript type called `JSX.Element` which is a type for
+   * the JSX element objects as created by `JSX.createElement` or JSX syntax.
+   *
+   * If you modify properties on the JSX global such that the default
+   * implementation of `JSX.createElement` is no longer used (eg. by replacing
+   * it with `React.createElement`), this value may no longer be relevant.
+   * However, the default JSX element object shape is designed to match
+   * React/Preact/etc.
+   *
+   * For more info, including info on how to change how JSX is compiled, see
+   * {@link JSX}.
+   *
+   */
   export const Element: unique symbol;
 
+  /**
+   * The TypeScript type for JSX Element objects created by the default
+   * implementation of `JSX.createElement`.
+   */
   export interface Element<
     Props = { [key: string | symbol | number]: any },
-    Type = any
+    Type = any,
   > {
     $$typeof: typeof Element;
     type: Type;
@@ -3001,43 +4099,86 @@ declare namespace JSX {
   }
 
   /**
-   * The value which gets passed into the JSX element constructor (as
-   * determined by {@link JSX.pragma}) when JSX fragment syntax is used (unless
-   * {@link JSX.pragmaFrag} is changed).
+   *
+   * `JSX.Fragment` is a Symbol which is used to indicate whether a JSX element
+   * is a JSX fragment.
+   *
+   * ```jsx
+   * // This gets compiled internally by yavascript into:
+   * // const a = JSX.createElement(JSX.Fragment, null);
+   * const frag = <></>;
+   *
+   * console.log(frag);
+   * // {
+   * //   $$typeof: Symbol(JSX.Element)
+   * //   type: Symbol(JSX.Fragment)
+   * //   props: null
+   * //   key: null
+   * // }
+   *
+   * console.log(a.type === JSX.Fragment);
+   * // true
+   * ```
+   *
+   * There is also a TypeScript type called `JSX.Fragment` which is a type for
+   * the JSX fragment element objects as created by `JSX.createElement` or JSX
+   * syntax.
+   *
+   * If you modify properties on the JSX global such that `JSX.Fragment` is no
+   * longer used (eg. by replacing it with `React.Fragment`), this value may no
+   * longer be relevant.
+   *
+   * For more info, including info on how to change how JSX is compiled, see
+   * {@link JSX}.
    */
   export const Fragment: unique symbol;
 
+  /**
+   * The TypeScript type for JSX Element objects whose type is `JSX.Fragment`,
+   * which is what yavascript creates internally when JSX fragment syntax
+   * (`<></>`) is used.
+   *
+   * If you modify properties on the JSX global such that `JSX.Fragment` is no
+   * longer used (eg. by replacing it with `React.Fragment`), this type may no
+   * longer be relevant.
+   */
   export type Fragment = Element<{}, typeof Fragment>;
 
   /**
-   * The JSX element builder function, which gets invoked whenever JSX syntax is
-   * used (unless {@link JSX.pragma} is changed).
+   * The JSX element builder function, which gets invoked internally by
+   * yavascript whenever JSX syntax is used (unless `JSX.pragma` gets changed by
+   * the user).
    *
    * Note that if you change this, you need to verify that the following
-   * expression always evaluates to `true` (by changing {@link types.JSX.Element}
-   * and {@link types.JSX.Fragment}):
+   * expression always evaluates to `true` (by changing `types.JSX.Element` and
+   * `types.JSX.Fragment`):
+   *
    * ```jsx
-   * types.JSX.Element(<a />) && types.JSX.Fragment(<></>)
+   * types.JSX.Element(<a />) && types.JSX.Fragment(<></>);
    * ```
    *
    * Failure to uphold this guarantee indicates a bug.
+   *
+   * For more info, including info on how to change how JSX is compiled, see
+   * {@link JSX}.
+   *
    */
   export let createElement: {
     <Type extends string | typeof Fragment | ((...args: any) => any)>(
-      type: Type
+      type: Type,
     ): Element<{}, Type>;
     <
       Type extends string | typeof Fragment | ((...args: any) => any),
-      Props extends { [key: string | number | symbol]: any }
+      Props extends { [key: string | number | symbol]: any },
     >(
       type: Type,
-      props: Props
+      props: Props,
     ): Element<Props, Type>;
 
     <
       Type extends string | typeof Fragment | ((...args: any) => any),
       Props extends { [key: string | number | symbol]: any },
-      Children extends Array<any>
+      Children extends Array<any>,
     >(
       type: Type,
       props: Props,
@@ -3046,7 +4187,7 @@ declare namespace JSX {
 
     <
       Type extends string | typeof Fragment | ((...args: any) => any),
-      Children extends Array<any>
+      Children extends Array<any>,
     >(
       type: Type,
       ...children: Children
@@ -3054,17 +4195,23 @@ declare namespace JSX {
   };
 }
 
+/**
+ * The `YAML` namespace contains functions which can serialize and deserialize
+ * YAML documents, following the same pattern as JavaScript's `JSON` builtin.
+ */
 declare const YAML: {
   /**
-   * Parse a YAML document (`input`) into a JSON-compatible value.
+   * Converts a YAML document string into a JavaScript value. It works the same
+   * way that `JSON.parse` does, but for YAML.
    */
   parse(
     input: string,
-    reviver?: (this: any, key: string, value: any) => any
+    reviver?: (this: any, key: string, value: any) => any,
   ): any;
 
   /**
-   * Convert a JSON-compatible value into a YAML document.
+   * Converts a JavaScript value into a YAML document string. It works the same
+   * way that `JSON.stringify` does, but for YAML.
    */
   stringify(
     input: any,
@@ -3072,10 +4219,22 @@ declare const YAML: {
       | ((this: any, key: string, value: any) => any)
       | (number | string)[]
       | null,
-    indent?: number
+    indent?: number,
   ): string;
 };
 
+/**
+ * Serializes or deserializes CSV data.
+ *
+ * The `CSV` object contains a `parse` function and a `stringify` function which
+ * can be used to parse strings of CSV (comma-separated values) data into
+ * arrays-of-arrays-of-strings and serialize arrays-of-arrays-of-strings into
+ * strings of CSV data.
+ *
+ * Its interface is similar to `JSON.parse` and `JSON.stringify`, but CSV does
+ * not support the spacing/replacer/reviver options that `JSON.parse` and
+ * `JSON.stringify` have.
+ */
 declare const CSV: {
   /**
    * Parse a CSV string into an Array of Arrays of strings.
@@ -3094,9 +4253,18 @@ declare const CSV: {
   stringify(input: Array<Array<string>>): string;
 };
 
+/**
+ * An object with a `parse` function and a `stringify` function which can be
+ * used to parse TOML document strings into objects and serialize objects into
+ * TOML document strings.
+ *
+ * Its interface is similar to `JSON.parse` and `JSON.stringify`, but
+ * `TOML.parse` and `TOML.stringify` do not support the spacing/replacer/reviver
+ * options that `JSON.parse` and `JSON.stringify` do.
+ */
 declare var TOML: {
   /**
-   * Parse a TOML document (`data`) into an object.
+   * Parse a TOML document string (`data`) into an object.
    */
   parse(data: string): { [key: string]: any };
   /**
@@ -3106,31 +4274,43 @@ declare var TOML: {
 };
 
 interface RegExpConstructor {
-  /** See https://github.com/tc39/proposal-regex-escaping */
+  /**
+   * The function `RegExp.escape` accepts an input string and prefixes with `\`
+   * those characters in that string which have a special meaning when appearing
+   * in a regular expression.
+   *
+   * The implementation is based on the stage 2 ECMAScript proposal of the same
+   * name: https://github.com/tc39/proposal-regex-escaping
+   */
   escape(str: any): string;
 }
 
 interface StringConstructor {
   /**
-   * Remove leading minimum indentation from the string.
-   * The first line of the string must be empty.
+   * The function `String.dedent` can be used to remove leading indentation from
+   * a string. It is commonly used as a tagged template function, but you can
+   * also call it and pass in a string.
    *
-   * https://github.com/tc39/proposal-string-dedent
+   * Note that the first line of the string must be empty.
+   *
+   * `String.dedent` is the default export from the npm package `string-dedent`.
+   * See its readme on npm for more info:
+   * https://www.npmjs.com/package/string-dedent
    */
   dedent: {
     /**
-     * Remove leading minimum indentation from the string.
-     * The first line of the string must be empty.
+     * Removes leading minimum indentation from the string `input`.
+     * The first line of `input` MUST be empty.
      *
-     * https://github.com/tc39/proposal-string-dedent
+     * For more info, see: https://www.npmjs.com/package/string-dedent#usage
      */
     (input: string): string;
 
     /**
-     * Remove leading minimum indentation from the template literal.
-     * The first line of the string must be empty.
+     * Removes leading minimum indentation from the tagged template literal.
+     * The first line of the template literal MUST be empty.
      *
-     * https://github.com/tc39/proposal-string-dedent
+     * For more info, see: https://www.npmjs.com/package/string-dedent#usage
      */
     (
       strings: readonly string[] | ArrayLike<string>,
@@ -3141,18 +4321,36 @@ interface StringConstructor {
      * Wrap another template tag function such that tagged literals
      * become dedented before being passed to the wrapped function.
      *
-     * https://www.npmjs.com/package/string-dedent#usage
+     * For more info, see: https://www.npmjs.com/package/string-dedent#usage
      */
     <
       Func extends (
         strings: readonly string[] | ArrayLike<string>,
         ...substitutions: any[]
-      ) => string
+      ) => string,
     >(
-      input: Func
+      input: Func,
     ): Func;
   };
 }
+
+/**
+ * Opens the resource at the given path or URL using the operating system's
+ * default application or handler.
+ *
+ * Examples:
+ *
+ * ```ts
+ * openUrl("/home/me/stuff/code.txt"); // opens code.txt in your default text editor
+ * openUrl("code.txt"); // same as above, using relative path
+ * openUrl("file:///home/me/stuff/code.txt"); // same as above, using file:// url
+ *
+ * openUrl("IMG_001.jpg"); // opens IMG_001.jpg in your default image viewer
+ *
+ * openUrl("https://example.com/") // opens example.com in your default web browser
+ * ```
+ */
+declare function openUrl(urlOrFilePath: string | Path): void;
 
 // prettier-ignore
 /** Any integer in the range [0, 255]. */
@@ -3206,6 +4404,53 @@ interface ErrorOptions {
   [key: string]: any;
 }
 
+/**
+ * For compatibility with Node.js scripts, the global object is accessible via
+ * the global variable named "global".
+ */
+declare var global: typeof globalThis;
+
+/**
+ * A `process` global is provided for rudimentary compatibility with Node.js
+ * scripts. It contains a subset of the properties found on the Node.js
+ * `process` global, which each forward to their corresponding yavascript API.
+ *
+ * For instance, `process.env` is a getter that returns {@link env}, and
+ * `process.argv` is a getter that returns {@link scriptArgs}.
+ *
+ * If you are writing yavascript-specific code, you should use yavascript's APIs
+ * instead of `process`.
+ */
+declare var process: {
+  version: string;
+  versions: {
+    node: string;
+    yavascript: string;
+    unicode: string;
+  };
+  arch: string;
+  /** Same as the global {@link env}. */
+  readonly env: { [key: string]: string | undefined };
+  /** Same as the global {@link scriptArgs}. */
+  readonly argv: Array<string>;
+  /** Same as `scriptArgs[0]`. */
+  readonly argv0: string;
+  /**
+   * Shortcut for `os.realpath(os.execPath())`, using the QuickJS {@link os}
+   * module.
+   */
+  readonly execPath: string;
+  /**
+   * Uses `std.getExitCode()` and `std.setExitCode()` from the QuickJS
+   * {@link std} module.
+   */
+  exitCode: number;
+  /**
+   * Uses `std.exit()` from the QuickJS {@link std} module.
+   */
+  exit(code?: number | null | undefined): void;
+};
+
 // ==========================================
 // ------------------------------------------
 // QuickJS APIs, which YavaScript builds upon
@@ -3223,7 +4468,7 @@ interface ObjectConstructor {
    */
   toPrimitive(
     input: any,
-    hint: "string" | "number" | "default"
+    hint: "string" | "number" | "default",
   ): string | number | bigint | boolean | undefined | symbol | null;
 
   /**
@@ -3322,8 +4567,9 @@ interface LeftOperators<T, Left> extends Partial<OperatorFunctions<Left, T>> {
   right?: undefined;
 }
 
-interface RightOperators<T, Right>
-  extends Partial<OperatorFunctions<T, Right>> {
+interface RightOperators<T, Right> extends Partial<
+  OperatorFunctions<T, Right>
+> {
   left?: undefined;
   right: {};
 }
@@ -3352,7 +4598,7 @@ interface OperatorsConstructor {
    * using this function.
    */
   updateBigIntOperators(
-    ops: Pick<OperatorFunctions<BigInt, BigInt>, "/" | "**">
+    ops: Pick<OperatorFunctions<BigInt, BigInt>, "/" | "**">,
   ): void;
 }
 
@@ -3905,7 +5151,7 @@ interface BigFloat {
   toPrecision(
     precision: number,
     roundingMode?: BigFloatRoundingMode,
-    radix?: number
+    radix?: number,
   ): string;
 
   /**
@@ -3918,7 +5164,7 @@ interface BigFloat {
   toFixed(
     fractionDigits: number,
     roundingMode?: BigFloatRoundingMode,
-    radix?: number
+    radix?: number,
   ): string;
 
   /**
@@ -3931,7 +5177,7 @@ interface BigFloat {
   toExponential(
     fractionDigits: number,
     roundingMode?: BigFloatRoundingMode,
-    radix?: number
+    radix?: number,
   ): string;
 
   [Symbol.typeofValue]: () => "bigfloat";
@@ -4063,7 +5309,7 @@ interface BigDecimal {
    */
   toFixed(
     fractionDigits: number,
-    roundingMode?: BigDecimalRoundingMode
+    roundingMode?: BigDecimalRoundingMode,
   ): string;
 
   /**
@@ -4074,7 +5320,7 @@ interface BigDecimal {
    */
   toExponential(
     fractionDigits: number,
-    roundingMode?: BigDecimalRoundingMode
+    roundingMode?: BigDecimalRoundingMode,
   ): string;
 }
 
@@ -4082,33 +5328,6 @@ interface BigDecimal {
 // QuickJS, but TypeScript does not support operator overloading. As such,
 // TypeScript will not understand or handle unary/binary operators for BigFloat
 // and BigDecimal properly.
-
-/**
- * Print the arguments separated by spaces and a trailing newline.
- *
- * Non-string args are coerced into a string via [ToString](https://tc39.es/ecma262/#sec-tostring).
- * Objects can override the default `ToString` behavior by defining a `toString` method.
- */
-declare var print: (...args: Array<any>) => void;
-
-/**
- * Object that provides functions for logging information.
- */
-interface Console {
-  /** Same as {@link print}(). */
-  log: typeof print;
-
-  /** Same as {@link print}(). */
-  warn: typeof print;
-
-  /** Same as {@link print}(). */
-  error: typeof print;
-
-  /** Same as {@link print}(). */
-  info: typeof print;
-}
-
-declare var console: Console;
 
 /** npm: @suchipi/print@2.5.0. License: ISC */
 /* (with some QuickJS-specific modifications) */
@@ -4550,6 +5769,27 @@ declare module "quickjs:std" {
    */
   export function getegid(): number;
 
+  /** The type of the object returned by {@link getpwuid}. */
+  export interface PasswdEntry {
+    name: string;
+    passwd: string;
+    uid: number;
+    gid: number;
+    gecos: string;
+    dir: string;
+    shell: string;
+  }
+
+  /**
+   * Get information from the passwd file entry for the specified user id.
+   *
+   * See https://linux.die.net/man/3/getpwuid.
+   *
+   * This function throws an error on windows, because windows doesn't support
+   * the same uid/gid paradigm as Unix-like operating systems.
+   */
+  export function getpwuid(id: number): PasswdEntry;
+
   interface UrlGet {
     /**
      * Download `url` using the `curl` command line utility. Returns string
@@ -4616,7 +5856,10 @@ declare module "quickjs:std" {
      * - `responseHeaders`: headers separated by CRLF (string)
      * - `status`: status code (number)
      */
-    (url: string, options: { full: true }): {
+    (
+      url: string,
+      options: { full: true },
+    ): {
       status: number;
       response: string;
       responseHeaders: string;
@@ -4631,7 +5874,10 @@ declare module "quickjs:std" {
      * - `responseHeaders`: headers separated by CRLF (string)
      * - `status`: status code (number)
      */
-    (url: string, options: { full: true; binary: false }): {
+    (
+      url: string,
+      options: { full: true; binary: false },
+    ): {
       status: number;
       response: string;
       responseHeaders: string;
@@ -4646,7 +5892,10 @@ declare module "quickjs:std" {
      * - `responseHeaders`: headers separated by CRLF (string)
      * - `status`: status code (number)
      */
-    (url: string, options: { full: true; binary: true }): {
+    (
+      url: string,
+      options: { full: true; binary: true },
+    ): {
       status: number;
       response: ArrayBuffer;
       responseHeaders: string;
@@ -4679,7 +5928,7 @@ declare module "quickjs:std" {
   export function strftime(
     maxBytes: number,
     format: string,
-    time: Date | number
+    time: Date | number,
   ): string;
 }
 
@@ -4747,7 +5996,7 @@ declare module "quickjs:os" {
     fd: number,
     buffer: ArrayBuffer,
     offset: number,
-    length: number
+    length: number,
   ): number;
 
   /** Write `length` bytes to the file with descriptor `fd` from the ArrayBuffer `buffer` at byte position `offset`. Return the number of written bytes. */
@@ -4755,7 +6004,7 @@ declare module "quickjs:os" {
     fd: number,
     buffer: ArrayBuffer,
     offset: number,
-    length: number
+    length: number,
   ): number;
 
   /** Return `true` if the file opened with descriptor `fd` is a TTY (terminal). */
@@ -5027,7 +6276,7 @@ declare module "quickjs:os" {
   /** Call the function `func` when the signal `signal` happens. Only a single handler per signal number is supported. Use `null` to set the default handler or `undefined` to ignore the signal. Signal handlers can only be defined in the main thread. */
   export function signal(
     signal: number,
-    func: null | undefined | (() => void)
+    func: null | undefined | (() => void),
   ): void;
 
   /** POSIX signal number. */
@@ -5166,7 +6415,7 @@ declare module "quickjs:os" {
   /** Call the function func after delay ms. Return a handle to the timer. */
   export function setTimeout(
     func: (...args: any) => any,
-    delay: number
+    delay: number,
   ): OSTimer;
 
   /** Cancel a timer. */
@@ -5336,6 +6585,15 @@ interface ModuleDelegate {
   };
 
   /**
+   * An Array containing the names of all the built-in modules, such as
+   * "quickjs:std", "quickjs:bytecode", etc.
+   *
+   * `quickjs:engine`'s `defineBuiltinModule` function adds to the end of this
+   * array.
+   */
+  builtinModuleNames: Array<string>;
+
+  /**
    * Resolves a require/import request from `fromFile` into a canonicalized
    * path.
    *
@@ -5468,7 +6726,7 @@ declare module "quickjs:engine" {
    */
   export function evalScript(
     code: string,
-    options?: { backtraceBarrier?: boolean; filename?: string }
+    options?: { backtraceBarrier?: boolean; filename?: string },
   ): any;
 
   /**
@@ -5488,7 +6746,7 @@ declare module "quickjs:engine" {
    */
   export function importModule(
     filename: string,
-    basename?: string
+    basename?: string,
   ): { [key: string]: any };
 
   /**
@@ -5520,7 +6778,7 @@ declare module "quickjs:engine" {
    */
   export function defineBuiltinModule(
     name: string,
-    obj: { [key: string]: any }
+    obj: { [key: string]: any },
   ): void;
 
   /**
@@ -5550,7 +6808,7 @@ declare module "quickjs:bytecode" {
       byteSwap?: boolean;
       sourceType?: "module" | "script";
       encodedFileName?: string;
-    }
+    },
   ): ArrayBuffer;
 
   /**
@@ -5558,7 +6816,7 @@ declare module "quickjs:bytecode" {
    */
   export function fromValue(
     value: any,
-    options?: { byteSwap?: boolean }
+    options?: { byteSwap?: boolean },
   ): ArrayBuffer;
 
   /**
