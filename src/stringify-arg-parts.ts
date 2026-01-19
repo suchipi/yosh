@@ -6,7 +6,7 @@ export function stringifyArgParts(
 ): Array<string> {
   return parts.map((part) => {
     switch (part.type) {
-      case "bare": {
+      case "bare-word": {
         if (options.quoteBare) {
           return JSON.stringify(part.content);
         } else {

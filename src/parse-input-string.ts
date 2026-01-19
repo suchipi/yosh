@@ -3,7 +3,7 @@ export type ArgPart =
       type: "gap";
     }
   | {
-      type: "bare";
+      type: "bare-word";
       content: string;
     }
   | {
@@ -73,7 +73,7 @@ export function parseInputString(
 
   function finishBareWord() {
     if (argBeingBuilt !== "") {
-      results.push({ type: "bare", content: argBeingBuilt });
+      results.push({ type: "bare-word", content: argBeingBuilt });
     }
     argBeingBuilt = "";
   }

@@ -26,16 +26,13 @@ export function determineTarget(input: string): {
   }
 
   const parts = parseInputString(input);
-  while (parts[0] != null && parts[0].type === "gap") {
-    parts.shift();
-  }
 
   if (parts.length === 0) {
     return { target: none, input };
   }
 
   const firstPart = parts[0];
-  if (firstPart.type !== "bare") {
+  if (firstPart.type !== "bare-word") {
     return { target: evalCivet, input };
   }
 

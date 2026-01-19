@@ -17,7 +17,7 @@ export function evalJsWithArgs(input: string) {
   let partsWithHomeExpanded: Array<ArgPart>;
   if (HOME) {
     partsWithHomeExpanded = partsAfterFirst.map((part) => {
-      if (part.type === "bare" || part.type === "double-quoted") {
+      if (part.type === "bare-word" || part.type === "double-quoted") {
         return {
           type: part.type,
           content: part.content.replace(/~/g, HOME),
